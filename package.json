@@ -1,0 +1,33 @@
+{
+  "name": "eth-multisig-v2",
+  "version": "1.0.0",
+  "description": "Ethereum multi signature wallet contract supporting single-tx execute and confirm with multiple owners",
+  "author": "Ben Chan",
+  "license": "ISC",
+  "main": "truffle.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "testrpc": "./node_modules/ethereumjs-testrpc/bin/testrpc",
+    "test": "./node_modules/truffle/cli.js test"
+  },
+  "keywords": [
+    "multi-sig",
+    "wallet",
+    "ethereum"
+  ],
+  "dependencies": {
+    "bluebird": "^3.3.5",
+    "bn": "^1.0.1",
+    "bn.js": "^4.11.3",
+    "ethereumjs-abi": "^0.6.0",
+    "ethereumjs-testrpc": "^2.0.7",
+    "lodash": "^4.12.0",
+    "q": "^1.4.1",
+    "should": "^8.3.1",
+    "truffle": "^1.0.3",
+    "web3": "^0.15.3"
+  },
+  "devDependencies": {}
+}
