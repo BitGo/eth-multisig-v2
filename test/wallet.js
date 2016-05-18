@@ -990,47 +990,6 @@ contract('Wallet', function(accounts) {
       });
     });
 
-    xit("Sending with expired time should fail, but can be confirmed in another transaction", function () {
-      // TBD: Can be fixed with small wallet refactor
-      var otherAccount = accounts[1];
-      var amount = 36;
-      var expireTime = Math.floor((new Date().getTime()) / 1000) - 1; // Expired signature
-      var sequenceId = walletSequenceId++;
-
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
-      var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-
-      var operationHash = getSha3ForConfirmationTx(otherAccount, amount, "", expireTime, sequenceId);
-      var sig = web3.eth.sign(accounts[0], operationHash);
-
-      return wallet.executeAndConfirm(otherAccount, web3.toWei(amount, "ether"), "", expireTime, sequenceId, sig, {from: accounts[2]})
-      .then(function () {
-        // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
-        otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
-
-        // Check wallet balance
-        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-        msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
-
-        // Try to confirm with the operation hash
-        return wallet.confirm("0x" + operationHash, {from: accounts[0]});
-      })
-      .then(function () {
-        // Check other account balance
-        return helpers.waitForEvents(walletEvents, 2); // wait for events to come in
-      })
-      .then(function () {
-        console.dir(walletEvents);
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
-        otherAccountStartEther.plus(amount).should.eql(otherAccountEndEther);
-
-        // Check wallet balance
-        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-        msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
-      });
-    });
-
     it("Can send with expired time very close in the future", function () {
       var otherAccount = accounts[1];
       var amount = 11;
