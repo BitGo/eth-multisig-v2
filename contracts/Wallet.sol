@@ -51,7 +51,16 @@ contract multiowned {
     mapping(bytes32 => PendingState) m_pending;
     bytes32[] m_pendingIndex;
 
-    // TYPES
+    // When we use ecrecover to verify signatures (in addition to msg.sender), an array window of sequence ids is used.
+    // This prevents from replay attacks by the first signer.
+    //
+    // Sequence IDs may not be repeated and should start from 1 onwards. Stores the last 10 largest sequence ids in a window
+    // New sequence ids being added must replace the smallest of those numbers and must be larger than the smallest value stored.
+    // This allows some degree of flexibility for submission of multiple transactions in a block.
+    uint constant c_maxSequenceIdWindowSize = 10;
+    uint[10] m_sequenceIdsUsed;
+
+  // TYPES
     // Struct for the status of a pending operation.
     struct PendingState {
         // Number of confirmations still needed
@@ -212,7 +221,26 @@ contract multiowned {
 
     // Gets an owner using ecrecover, records their confirmation and
     // returns true if the operation has the required number of confirmations
-    function confirmAndCheckUsingECRecover(bytes32 _operation, bytes _signature) internal returns (bool) {
+    function confirmAndCheckUsingECRecover(bytes32 _operation, uint _sequenceId, bytes _signature) internal returns (bool) {
+        // Verify that the sequence id has not been used before
+        // Create mapping of the sequence ids being used
+        uint lowestValueIndex = 0;
+        for (var i = 0; i < c_maxSequenceIdWindowSize; i++) {
+          if (m_sequenceIdsUsed[i] == _sequenceId) {
+            // This sequence ID has been used before. Disallow!
+            throw;
+          }
+          if (m_sequenceIdsUsed[i] < m_sequenceIdsUsed[lowestValueIndex]) {
+            lowestValueIndex = i;
+          }
+        }
+        if (_sequenceId < m_sequenceIdsUsed[lowestValueIndex]) {
+          // The sequence ID being used is lower than the lowest value in the window
+          // so we cannot accept it as it may have been used before
+          throw;
+        }
+        m_sequenceIdsUsed[lowestValueIndex] = _sequenceId;
+
         // We need to unpack the signature, which is given as an array of 65 bytes (from eth.sign)
         bytes32 r;
         bytes32 s;
@@ -276,9 +304,8 @@ contract multiowned {
     // This operation will look for 2 confirmations
     // The first confirmation will be verified using ecrecover
     // The second confirmation will be verified using msg.sender
-    function confirmWithSenderAndECRecover(bytes32 _operation, bytes _signature) internal returns (bool) {
-
-        return confirmAndCheck(_operation) || confirmAndCheckUsingECRecover(_operation, _signature);
+    function confirmWithSenderAndECRecover(bytes32 _operation, uint _sequenceId, bytes _signature) internal returns (bool) {
+        return confirmAndCheckUsingECRecover(_operation, _sequenceId, _signature) || confirmAndCheck(_operation);
     }
 
     // When adding and removing too many owners, we may reach the end of our indexed array
@@ -318,7 +345,7 @@ contract multiowned {
  Call the underLimit internal method within other methods to ensure total amount for the day is under the limit
  */
 contract daylimit is multiowned {
-    // FIELDS
+    // FIELDS Sequence IDs may not be repeated
     uint public m_dailyLimit;
     uint m_spentToday;
     uint m_lastDay;
@@ -400,17 +427,22 @@ contract multisig {
 
 /*
  Implementation of a multi-sig, multi-owned contract wallet with an optional day limit
- Usage:
- bytes32 h = Wallet(w).from(oneOwner).transact(to, value, data);
- Wallet(w).from(anotherOwner).confirm(h);
+ Usage (single signature per transaction):
+    bytes32 h = Wallet(w).from(oneOwner).execute(to, value, data);
+    Wallet(w).from(anotherOwner).confirm(h);
+ Usage (2 confirms in a single transaction):
+    uint expireTime = 1863771845; // 10 years in the future
+    uint sequenceId = 1; // or the next sequence Id obtained using getNextSequenceId();
+    bytes32 sha3 = sha3(to, value, data, expireTime, sequenceId); // see tests for examples how to build this
+    bytes signature = eth.sign(owner1, sha3); // sign the sha3 using owner1
+
+    // send the transaction (includes signature) using owner2
+    Wallet(w).from(owner2).executeAndConfirm(to, value, data, expireTime, sequenceId, signature);
  */
 contract Wallet is multisig, multiowned, daylimit {
     // FIELDS
     // Pending transactions we have at present.
     mapping (bytes32 => Transaction) m_txs;
-
-    // Sequence IDs that have been used before (should not allow reuse)
-    mapping (uint => bool) m_sequenceIdsUsed;
 
     // TYPES
     // Transaction structure to remember details of transaction lest it need be saved for a later call.
@@ -471,24 +503,22 @@ contract Wallet is multisig, multiowned, daylimit {
     }
 
     // Execute and confirm a transaction with 2 signatures - one using the msg.sender and another using ecrecover
-    function executeAndConfirm(address _to, uint _value, bytes _data, uint _expireTime, uint _sequenceId, bytes _signature) external onlyowner returns (bytes32 _r) {
+    // The signature is a signed form (using eth.sign) of tightly packed to, value, data, expiretime and sequenceId
+    // Sequence IDs are numbers starting from 1. They used to prevent replay attacks and may not be repeated.
+    function executeAndConfirm(address _to, uint _value, bytes _data, uint _expireTime, uint _sequenceId, bytes _signature)
+        external onlyowner
+        returns (bytes32 _r)
+    {
         // Determine the hash for this operation
         if (_expireTime < block.timestamp) {
           throw;
         }
 
-        // Create mapping of the sequence ids being used
-        if (m_sequenceIdsUsed[_sequenceId]) {
-          // This sequence ID has been used for this operation already. Disallow!
-          throw;
-        }
-        m_sequenceIdsUsed[_sequenceId] = true;
-
         // The unique hash is the combination of all arguments except the signature
         _r = sha3(_to, _value, _data, _expireTime, _sequenceId);
 
         // Confirm the operation
-        if (confirmWithSenderAndECRecover(_r, _signature)) {
+        if (confirmWithSenderAndECRecover(_r, _sequenceId, _signature)) {
           _to.call.value(_value)(_data);
           MultiTransact(msg.sender, _r, _value, _to, _data);
           return 0;

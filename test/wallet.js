@@ -8,6 +8,7 @@ var helpers = require('./helpers');
 
 // Used to build the solidity tightly packed buffer to sha3
 var abi = require('ethereumjs-abi');
+var crypto = require('crypto');
 var BN = require('bn.js');
 
 contract('Wallet', function(accounts) {
@@ -582,7 +583,7 @@ contract('Wallet', function(accounts) {
   });
 
   describe("Execution and confirmation using ecrecover (single tx 2 confirms)", function() {
-    var walletSequenceId = 0;
+    var walletSequenceId = 1;
     before(function () {
       // create wallet with limit of 0
       return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
@@ -666,7 +667,48 @@ contract('Wallet', function(accounts) {
         var amount = _.random(1,9);
         var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
         var sequenceId = walletSequenceId++;
-        var data = _.shuffle("0123456789abcdef").join("");
+        var data = crypto.randomBytes(20).toString('hex');
+
+        var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+        var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+
+        var operationHash = getSha3ForConfirmationTx(otherAccount, amount, data, expireTime, sequenceId);
+        var sig = web3.eth.sign(accounts[0], operationHash);
+
+        console.log("ExpectSuccess " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
+
+        return wallet.executeAndConfirm(otherAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, {from: accounts[1]})
+        .then(function () {
+          if (sig.length !== 132) {
+            return stressTest(); // TODO: FIX THIS WORKAROUND, TestRPC is signing incorrectly (returning too small sigs)
+          }
+          // Check other account balance
+          var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+          otherAccountStartEther.plus(amount).should.eql(otherAccountEndEther);
+
+          // Check wallet balance
+          var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+          msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
+
+          return stressTest();
+        });
+      };
+      return stressTest();
+    });
+
+    it("Stress test: 10 rounds of attempting to reuse sequence ids - should fail", function() {
+      walletSequenceId -= 10;
+      var round = 0;
+      var stressTest = function() {
+        if (round++ >= 10) {
+          return;
+        }
+
+        var otherAccount = accounts[2];
+        var amount = _.random(1,9);
+        var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+        var sequenceId = walletSequenceId++;
+        var data = crypto.randomBytes(20).toString('hex');
 
         var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
@@ -677,17 +719,20 @@ contract('Wallet', function(accounts) {
         if (sig.length !== 132) {
           return stressTest(); // TODO: FIX THIS WORKAROUND, TestRPC is signing incorrectly (returning too small sigs)
         }
-        console.log("ExpectSuccess " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
+        console.log("ExpectThrow " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
 
         return wallet.executeAndConfirm(otherAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, {from: accounts[1]})
+        .catch(function(err) {
+          err.message.toString().should.startWith("Error: VM Exception");
+        })
         .then(function () {
           // Check other account balance
           var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
-          otherAccountStartEther.plus(amount).should.eql(otherAccountEndEther);
+          otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
           // Check wallet balance
           var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-          msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
+          msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
 
           return stressTest();
         });
@@ -706,7 +751,7 @@ contract('Wallet', function(accounts) {
         var amount = _.random(1,9);
         var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
         var sequenceId = walletSequenceId++;
-        var data = _.shuffle("0123456789abcdef").join("");
+        var data = crypto.randomBytes(20).toString('hex');
 
         var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
@@ -1019,7 +1064,7 @@ contract('Wallet', function(accounts) {
       var otherAccount = accounts[0];
       var amount = 18;
       var expireTime = Math.floor((new Date().getTime()) / 1000) + 60;
-      var sequenceId = walletSequenceId + 10;
+      var sequenceId = walletSequenceId + 100;
 
       var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
@@ -1043,7 +1088,7 @@ contract('Wallet', function(accounts) {
       var otherAccount = accounts[0];
       var amount = 18;
       var expireTime = Math.floor((new Date().getTime()) / 1000) + 60;
-      var sequenceId = walletSequenceId + 10;
+      var sequenceId = walletSequenceId + 100;
 
       var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
@@ -1087,6 +1132,33 @@ contract('Wallet', function(accounts) {
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
+      });
+    });
+
+    it("Cannot send with a sequence ID that is used but lower than the previous 5", function () {
+      var otherAccount = accounts[0];
+      var amount = 18;
+      var expireTime = Math.floor((new Date().getTime()) / 1000) + 60;
+      var sequenceId = 5;
+
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+      var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+
+      var hash = getSha3ForConfirmationTx(otherAccount, amount, "", expireTime, sequenceId);
+      var sig = web3.eth.sign(accounts[1], hash);
+
+      return wallet.executeAndConfirm(otherAccount, web3.toWei(amount, "ether"), "", expireTime, sequenceId, sig, {from: accounts[2]})
+      .catch(function(err) {
+        err.message.toString().should.startWith("Error: VM Exception");
+      })
+      .then(function () {
+        // Check other account balance
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+        otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
+
+        // Check wallet balance
+        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
       });
     });
 
