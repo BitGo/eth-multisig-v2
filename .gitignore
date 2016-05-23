@@ -6,3 +6,4 @@ node_modules
 coverage
 *.swp
 .node-xml*
+contracts/test*

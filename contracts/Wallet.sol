@@ -167,7 +167,7 @@ contract multiowned {
         OwnerAdded(_owner);
     }
 
-    // Adds an owner from the contract
+    // Removes an owner from the contract
     function removeOwner(address _owner) onlymanyowners(sha3(msg.data)) external {
         uint ownerIndex = m_ownerIndex[uint(_owner)];
         if (ownerIndex == 0) return;
@@ -476,7 +476,9 @@ contract Wallet is multisig, multiowned, daylimit {
     // We return an operation hash additional confirmations (also exposed on ConfirmationNeeded event)
     function execute(address _to, uint _value, bytes _data) external onlyowner returns (bytes32 _r) {
         // Check that we're under the daily limit - if so, execute the call
-        if (underLimit(_value)) {
+        // We also must check that there is no data (not a contract invocation),
+        // since we are unable to determine the value outcome of it.
+        if (underLimit(_value) && _data.length == 0) {
             SingleTransact(msg.sender, _value, _to, _data);
             // Yes - just execute the call.
             _to.call.value(_value)(_data);
