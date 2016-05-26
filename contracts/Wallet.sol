@@ -212,6 +212,17 @@ contract multiowned {
       return !(pending.ownersConfirmed & ownerIndexBit == 0);
     }
 
+    // Gets the next available sequence ID for signing when using confirmAndCheckUsingECRecover
+    function getNextSequenceId() returns (uint) {
+      uint highestSequenceId = 0;
+      for (var i = 0; i < c_maxSequenceIdWindowSize; i++) {
+        if (m_sequenceIdsUsed[i] > highestSequenceId) {
+          highestSequenceId = m_sequenceIdsUsed[i];
+        }
+      }
+      return highestSequenceId + 1;
+    }
+
     // INTERNAL METHODS
     // Called within the onlymanyowners modifier.
     // Records a confirmation by msg.sender and returns true if the operation has the required number of confirmations
