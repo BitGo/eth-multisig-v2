@@ -32,11 +32,25 @@ contract('Wallet', function(accounts) {
     }
   });
 
+  /**
+   * Helper method to get owners on the wallet
+   * @returns {*}
+   */
+  var getOwners = function(wallet) {
+    return wallet.m_numOwners.call()
+    .then(function(numOwners) {
+      return Promise.all(
+        _.range(numOwners).map(function(ownerIndex) { return wallet.getOwner.call(ownerIndex); })
+      );
+    })
+  };
+
   describe("Wallet creation", function() {
     it("2 of 3 multisig wallet with 2 required and limit of 0", function () {
       return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
       .then(function(result) {
         wallet = result;
+        console.log("Wallet address: " + result.address);
 
         // Check numerical constants
         return Promise.all([
@@ -64,6 +78,15 @@ contract('Wallet', function(accounts) {
         isOwnerResults[1].should.eql(true);
         isOwnerResults[2].should.eql(true);
         isOwnerResults[3].should.eql(false);
+
+        // Gets owners by index
+        return getOwners(wallet);
+      })
+      .then(function(owners) {
+        owners.length.should.eql(3);
+        owners.should.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
       });
     });
 
@@ -88,6 +111,14 @@ contract('Wallet', function(accounts) {
           numOwners.should.eql(web3.toBigNumber(numAccounts));
           signaturesRequired.should.eql(web3.toBigNumber(signaturesRequired));
           dailyLimit.should.eql(web3.toBigNumber(dailyLimit));
+
+          return getOwners(wallet);
+        })
+        .then(function(owners) {
+          // compare accounts with expected owners
+          // we sliced starting at 1 above because the sender is always included as an owner,
+          // but we should check starting with a slice of 0
+          _.intersection(accounts.slice(0, numAccounts), owners).length.should.eql(numAccounts);
         });
       };
 
@@ -745,14 +776,14 @@ contract('Wallet', function(accounts) {
 
         var operationHash = getSha3ForConfirmationTx(otherAccount, amount, data, expireTime, sequenceId);
         var sig = web3.eth.sign(accounts[0], operationHash);
+        if (sig.length !== 132) {
+          return stressTest(); // TODO: FIX THIS WORKAROUND, TestRPC is signing incorrectly (returning too small sigs)
+        }
 
         console.log("ExpectSuccess " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
 
         return wallet.executeAndConfirm(otherAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, {from: accounts[1]})
         .then(function () {
-          if (sig.length !== 132) {
-            return stressTest(); // TODO: FIX THIS WORKAROUND, TestRPC is signing incorrectly (returning too small sigs)
-          }
           // Check other account balance
           var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
           otherAccountStartEther.plus(amount).should.eql(otherAccountEndEther);
@@ -1303,13 +1334,19 @@ contract('Wallet', function(accounts) {
         return Promise.all([
           wallet.m_numOwners.call(),
           wallet.m_required.call(),
-          wallet.isOwner.call(accounts[9])
+          wallet.isOwner.call(accounts[9]),
+          getOwners(wallet)
         ]);
       })
-      .spread(function (numOwners, signaturesRequired, isOwner) {
+      .spread(function (numOwners, signaturesRequired, isOwner, owners) {
         numOwners.should.eql(web3.toBigNumber(3)); // new owner not added yet
         signaturesRequired.should.eql(web3.toBigNumber(2));
         isOwner.should.eql(false);
+
+        owners.should.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
+        owners.should.not.containEql(accounts[9]);
 
         return helpers.waitForEvents(walletEvents); // wait for events to come in
       })
@@ -1406,6 +1443,14 @@ contract('Wallet', function(accounts) {
         signaturesRequired.should.eql(web3.toBigNumber(2));
         isOwner.should.eql(true);
 
+        return getOwners(wallet);
+      })
+      .then(function(owners) {
+        owners.should.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
+        owners.should.containEql(accounts[3]);
+
         return helpers.waitForEvents(walletEvents, 3);
       })
       .then(function () {
@@ -1470,12 +1515,18 @@ contract('Wallet', function(accounts) {
         // Check numerical constants
         return Promise.all([
           wallet.m_numOwners.call(),
-          wallet.isOwner.call(accounts[4])
+          wallet.isOwner.call(accounts[4]),
+          getOwners(wallet)
         ]);
       })
-      .spread(function (numOwners, isOwner) {
+      .spread(function (numOwners, isOwner, owners) {
         numOwners.should.eql(web3.toBigNumber(5));
         isOwner.should.eql(true);
+
+        owners.should.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
+        owners.should.containEql(accounts[4]);
 
         return wallet.confirm(operationHash, {from: accounts[4]});
       })
@@ -1512,12 +1563,17 @@ contract('Wallet', function(accounts) {
         // Check numerical constants
         return Promise.all([
           wallet.m_numOwners.call(),
-          wallet.isOwner.call(accounts[0])
+          wallet.isOwner.call(accounts[0]),
+          getOwners(wallet)
         ]);
       })
-      .spread(function(numOwners, isOwner) {
+      .spread(function(numOwners, isOwner, owners) {
         numOwners.should.eql(web3.toBigNumber(3));
         isOwner.should.eql(true);
+
+        owners.should.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
 
         return helpers.waitForEvents(walletEvents); // wait for events to come in
       })
@@ -1562,13 +1618,18 @@ contract('Wallet', function(accounts) {
         return Promise.all([
           wallet.m_numOwners.call(),
           wallet.m_required.call(),
-          wallet.isOwner.call(accounts[1])
+          wallet.isOwner.call(accounts[1]),
+          getOwners(wallet)
         ]);
       })
-      .spread(function (numOwners, signaturesRequired, isOwner) {
+      .spread(function (numOwners, signaturesRequired, isOwner, owners) {
         numOwners.should.eql(web3.toBigNumber(2));
         signaturesRequired.should.eql(web3.toBigNumber(2));
         isOwner.should.eql(false);
+
+        owners.should.containEql(accounts[0]);
+        owners.should.not.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
 
         return wallet.execute(accounts[2], web3.toWei(1, "ether"), "", { from: accounts[1] });
       })
@@ -1721,13 +1782,17 @@ contract('Wallet', function(accounts) {
         return Promise.all([
           wallet.m_numOwners.call(),
           wallet.isOwner.call(accounts[0]),
-          wallet.isOwner.call(accounts[5])
+          wallet.isOwner.call(accounts[5]),
+          getOwners(wallet)
         ]);
       })
-      .spread(function(numOwners, isOwner0, isOwner5) {
+      .spread(function(numOwners, isOwner0, isOwner5, owners) {
         numOwners.should.eql(web3.toBigNumber(3));
         isOwner0.should.eql(true);
         isOwner5.should.eql(false);
+        owners.should.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
 
         return helpers.waitForEvents(walletEvents); // wait for events to come in
       })
@@ -1756,14 +1821,19 @@ contract('Wallet', function(accounts) {
           wallet.m_numOwners.call(),
           wallet.m_required.call(),
           wallet.isOwner.call(accounts[0]),
-          wallet.isOwner.call(accounts[5])
+          wallet.isOwner.call(accounts[5]),
+          getOwners(wallet)
         ]);
       })
-      .spread(function(numOwners, signaturesRequired, isOwner0, isOwner5) {
+      .spread(function(numOwners, signaturesRequired, isOwner0, isOwner5, owners) {
         numOwners.should.eql(web3.toBigNumber(3));
         signaturesRequired.should.eql(web3.toBigNumber(2));
         isOwner0.should.eql(false);
         isOwner5.should.eql(true);
+        owners.should.not.containEql(accounts[0]);
+        owners.should.containEql(accounts[1]);
+        owners.should.containEql(accounts[2]);
+        owners.should.containEql(accounts[5]);
 
         return wallet.execute(accounts[7], web3.toWei(1, "ether"), "", { from: accounts[0] });
       })
