@@ -239,6 +239,20 @@ contract multiowned {
       return highestSequenceId + 1;
     }
 
+    // Given an operation hash, get the number of confirmations needed
+    function getPendingConfirmationsNeeded(bytes32 _operation) returns (uint) {
+        return m_pending[_operation].yetNeeded;
+    }
+
+    // Given an operation hash and an owner, return if the owner has confirmed that operation
+    function hasOwnerConfirmedOperation(address _owner, bytes32 _operation) returns (bool) {
+        uint ownerIndex = m_ownerIndex[_owner];
+        uint ownerIndexBit = 2**ownerIndex;
+        var pendingOperation = m_pending[_operation];
+
+        return (pendingOperation.ownersConfirmed & ownerIndexBit) != 0;
+    }
+
     // INTERNAL METHODS
     // Called within the onlymanyowners modifier.
     // Records a confirmation by msg.sender and returns true if the operation has the required number of confirmations
@@ -350,6 +364,11 @@ contract multiowned {
                 m_owners[m_numOwners] = 0;
             }
         }
+    }
+
+    // Gets the hash of a pending operation at the specified index
+    function getPendingOperation(uint _index) internal returns (bytes32) {
+        return m_pendingIndex[_index];
     }
 
     // Clear all pending operations
@@ -561,6 +580,51 @@ contract Wallet is multisig, multiowned, daylimit {
         ConfirmationNeeded(_r, msg.sender, _value, _to, _data);
     }
 
+    // Gets the number of pending transactions
+    function numPendingTransactions() returns (uint) {
+        var pendingTransactionsCount = 0;
+        // Use m_pendingIndex.length to get all hashes, then count how many of the
+        // operations are transactions, because we don't want to store hashes twice
+        // and this is a local call anyway
+        for (uint i = 0; i < m_pendingIndex.length; i++) {
+            if (isPendingTransaction(i)) {
+                pendingTransactionsCount++;
+            }
+        }
+
+        return pendingTransactionsCount;
+    }
+
+    // Gets the hash of a pending operation at the specified index
+    function getPendingTransaction(uint _index) returns (bytes32) {
+        var pendingTransactionsCount = 0;
+        // Seek through all of m_pendingIndex (used in the multiowned contract)
+        // But only count transactions
+        for (uint i = 0; i < m_pendingIndex.length; i++) {
+            if (isPendingTransaction(i)) {
+                if (_index == pendingTransactionsCount) {
+                    return m_pendingIndex[i];
+                }
+                pendingTransactionsCount++;
+            }
+        }
+    }
+
+    // Gets the destination address of a pending transaction by the operation hash
+    function getPendingTransactionToAddress(bytes32 _operation) returns (address) {
+        return m_txs[_operation].to;
+    }
+
+    // Gets the value in wei of a pending transaction by the operation hash
+    function getPendingTransactionValue(bytes32 _operation) returns (uint) {
+        return m_txs[_operation].value;
+    }
+
+    // Gets the proposed data of a pending transaction by the operation hash
+    function getPendingTransactionData(bytes32 _operation) returns (bytes) {
+        return m_txs[_operation].data;
+    }
+
     // INTERNAL METHODS
     // Clear all pending transaction operations that have not been confirmed by enough owners
     function clearPending() internal {
@@ -569,5 +633,13 @@ contract Wallet is multisig, multiowned, daylimit {
             delete m_txs[m_pendingIndex[i]];
         }
         super.clearPending();
+    }
+
+    // Determine if a pending operation index is a pending transaction
+    function isPendingTransaction(uint _index) internal returns (bool) {
+        if (m_txs[m_pendingIndex[_index]].to != 0 || m_txs[m_pendingIndex[_index]].data.length != 0) {
+            return true;
+        }
+        return false;
     }
 }

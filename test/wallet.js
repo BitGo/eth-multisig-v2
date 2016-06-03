@@ -34,15 +34,76 @@ contract('Wallet', function(accounts) {
 
   /**
    * Helper method to get owners on the wallet
-   * @returns {*}
+   *
+   * @param wallet
+   * @returns array of owners on the wallet
    */
   var getOwners = function(wallet) {
     return wallet.m_numOwners.call()
-    .then(function(numOwners) {
+    .then(function (numOwners) {
       return Promise.all(
-        _.range(numOwners).map(function(ownerIndex) { return wallet.getOwner.call(ownerIndex); })
+        _.range(numOwners).map(function (ownerIndex) {
+          return wallet.getOwner.call(ownerIndex);
+        })
       );
-    })
+    });
+  };
+
+  /**
+   * Helper method to get pending transactions on the wallet
+   * Will enumerate these properties using getPendingTransaction,
+   * getPendingTransactionToAddress, getPendingTransactionValue etc.
+   *
+   * @param wallet
+   * @returns object with properties of the wallet
+   */
+  var getPendingTransactions = function(wallet) {
+    return Promise.all([
+      getOwners(wallet),
+      wallet.numPendingTransactions.call()
+    ])
+    .spread(function(owners, numPendingTransactions) {
+      var getPendingTransaction = function(index) {
+        return wallet.getPendingTransaction.call(index)
+        .then(function(operationHash) {
+          /**
+           * Enumerates owners that have confirmed this operation using hasOwnerConfirmedOperation
+           * @returns [] list of owner addresses that have confirmed this operation
+           */
+          var getSigners = function() {
+            var signers = [];
+            return Promise.all(
+              owners.map(
+                function(ownerAddress) {
+                  return wallet.hasOwnerConfirmedOperation.call(ownerAddress, operationHash)
+                  .then(function(hasConfirmed) {
+                    if (hasConfirmed) {
+                      signers.push(ownerAddress);
+                    }
+                  });
+                }
+              )
+            )
+            .then(function() {
+              return signers;
+            })
+          };
+
+          operationHash.should.not.eql("");
+          return Promise.props({
+            operation: operationHash,
+            to: wallet.getPendingTransactionToAddress.call(operationHash),
+            value: wallet.getPendingTransactionValue.call(operationHash),
+            data: wallet.getPendingTransactionData.call(operationHash),
+            signers: getSigners()
+          });
+        });
+      };
+
+      return Promise.all(
+        _.range(numPendingTransactions).map(getPendingTransaction)
+      );
+    });
   };
 
   describe("Wallet creation", function() {
@@ -87,6 +148,10 @@ contract('Wallet', function(accounts) {
         owners.should.containEql(accounts[0]);
         owners.should.containEql(accounts[1]);
         owners.should.containEql(accounts[2]);
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(0);
       });
     });
 
@@ -184,6 +249,11 @@ contract('Wallet', function(accounts) {
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(0);
       });
     });
 
@@ -212,23 +282,41 @@ contract('Wallet', function(accounts) {
         singleTransactEvent.args.owner.should.eql(accounts[0]);
         singleTransactEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(51, "ether")));
         singleTransactEvent.args.to.should.eql(accounts[2]);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(0);
       });
     });
 
     it("Send out another 60 ether as a single user (total 110, over the limit, fails)", function () {
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+      var otherAccount = accounts[2];
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
 
       // Send ether out of the wallet contract
-      return wallet.execute(accounts[2], web3.toWei(60, "ether"), "", { from: accounts[0] })
+      return wallet.execute(otherAccount, web3.toWei(60, "ether"), "", { from: accounts[0] })
       .then(function() {
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(1);
+
+        var pendingTransaction = pendingTransactions[0];
+        pendingTransaction.to.should.eql(otherAccount);
+        pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(60, "ether")));
+        pendingTransaction.data.should.eql("0x");
+        pendingTransaction.signers.length.should.eql(1);
+        pendingTransaction.signers.should.containEql(accounts[0]);
       });
     });
 
@@ -283,14 +371,15 @@ contract('Wallet', function(accounts) {
     });
 
     it("Execute a withdrawal and confirm with another transaction", function () {
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+      var otherAccount = accounts[2];
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
 
       // Send ether out of the wallet contract
-      return wallet.execute(accounts[2], web3.toWei(10, "ether"), "", { from: accounts[1] })
+      return wallet.execute(otherAccount, web3.toWei(10, "ether"), "", { from: accounts[1] })
       .then(function() {
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
         // Check wallet balance
@@ -306,13 +395,27 @@ contract('Wallet', function(accounts) {
         });
         confirmationNeededEvent.args.initiator.should.eql(accounts[1]);
         confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(10, "ether")));
-        confirmationNeededEvent.args.to.should.eql(accounts[2]);
+        confirmationNeededEvent.args.to.should.eql(otherAccount);
         operationHash = confirmationNeededEvent.args.operation;
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(1);
+
+        var pendingTransaction = pendingTransactions[0];
+        pendingTransaction.to.should.eql(otherAccount);
+        pendingTransaction.operation.should.eql(operationHash);
+        pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(10, "ether")));
+        pendingTransaction.data.should.eql("0x");
+        pendingTransaction.signers.length.should.eql(1);
+        pendingTransaction.signers.should.containEql(accounts[1]);
+
         return wallet.confirm(operationHash, { from: accounts[0] });
       })
       .then(function() {
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(10).should.eql(otherAccountEndEther);
 
         // Check wallet balance
@@ -329,11 +432,16 @@ contract('Wallet', function(accounts) {
         multiTransactEvent.args.owner.should.eql(accounts[0]);
         multiTransactEvent.args.operation.should.eql(operationHash);
         multiTransactEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(10, "ether")));
-        multiTransactEvent.args.to.should.eql(accounts[2]);
+        multiTransactEvent.args.to.should.eql(otherAccount);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(0);
       });
     });
 
-    it("Execute a withdrawal and confirm with another transaction (using same account as the to account)", function () {
+    it("Execute another withdrawal and confirm it (destination address equals approver account)", function () {
       var destination = accounts[2];
       var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(destination), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
@@ -391,16 +499,16 @@ contract('Wallet', function(accounts) {
     });
 
     it("All transactions with data should require multiple confirmations", function () {
-      var destination = accounts[2];
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(destination), 'ether');
+      var otherAccount = accounts[2];
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
       var operationHash;
 
       // Send ether out of the wallet contract
-      return wallet.execute(accounts[2], web3.toWei(0, "ether"), "0xab3456", { from: accounts[1] })
+      return wallet.execute(otherAccount, web3.toWei(0, "ether"), "0xab3456", { from: accounts[1] })
       .then(function() {
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(destination), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
         // Check wallet balance
@@ -417,9 +525,23 @@ contract('Wallet', function(accounts) {
         confirmationNeededEvent.args.initiator.should.eql(accounts[1]);
         confirmationNeededEvent.args.data.should.eql("0xab3456");
         confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(0, "ether")));
-        confirmationNeededEvent.args.to.should.eql(destination);
+        confirmationNeededEvent.args.to.should.eql(otherAccount);
         operationHash = confirmationNeededEvent.args.operation;
-        return wallet.confirm(operationHash, { from: destination });
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(1);
+
+        var pendingTransaction = pendingTransactions[0];
+        pendingTransaction.to.should.eql(otherAccount);
+        pendingTransaction.operation.should.eql(operationHash);
+        pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(0, "ether")));
+        pendingTransaction.data.should.eql("0xab3456");
+        pendingTransaction.signers.length.should.eql(1);
+        pendingTransaction.signers.should.containEql(accounts[1]);
+
+        return wallet.confirm(operationHash, { from: otherAccount });
       })
       .then(function(txHash) {
         // need to get tx/txReceipt to subtract gas*gasPrice (the network fee) from account 2 balance
@@ -427,7 +549,7 @@ contract('Wallet', function(accounts) {
         var txReceipt = web3.eth.getTransactionReceipt(txHash);
         var feePaid = web3.fromWei(tx.gasPrice.times(txReceipt.gasUsed), 'ether');
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(destination), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).minus(feePaid).should.eql(otherAccountEndEther);
 
         // Check wallet balance
@@ -441,24 +563,25 @@ contract('Wallet', function(accounts) {
         var multiTransactEvent = _.find(walletEvents, function(event) {
           return event.event === 'MultiTransact';
         });
-        multiTransactEvent.args.owner.should.eql(destination);
+        multiTransactEvent.args.owner.should.eql(otherAccount);
         multiTransactEvent.args.operation.should.eql(operationHash);
         multiTransactEvent.args.data.should.eql("0xab3456");
         multiTransactEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(0, "ether")));
-        multiTransactEvent.args.to.should.eql(destination);
+        multiTransactEvent.args.to.should.eql(otherAccount);
       });
     });
 
     it("Execute a withdrawal and try to confirm their own execution from same account (should fail)", function () {
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+      var otherAccount = accounts[2];
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
       var operationHash;
 
       // Send ether out of the wallet contract
-      return wallet.execute(accounts[2], web3.toWei(10, "ether"), "", { from: accounts[1] })
+      return wallet.execute(otherAccount, web3.toWei(11, "ether"), "", { from: accounts[1] })
       .then(function() {
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
         // Check wallet balance
@@ -473,19 +596,31 @@ contract('Wallet', function(accounts) {
           return event.event === 'ConfirmationNeeded';
         });
         confirmationNeededEvent.args.initiator.should.eql(accounts[1]);
-        confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(10, "ether")));
-        confirmationNeededEvent.args.to.should.eql(accounts[2]);
+        confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(11, "ether")));
+        confirmationNeededEvent.args.to.should.eql(otherAccount);
         operationHash = confirmationNeededEvent.args.operation;
         return wallet.confirm(operationHash, { from: accounts[1] });
       })
       .then(function() {
         // Check other account balance
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(1);
+
+        var pendingTransaction = pendingTransactions[0];
+        pendingTransaction.to.should.eql(otherAccount);
+        pendingTransaction.operation.should.eql(operationHash);
+        pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(11, "ether")));
+        pendingTransaction.signers.length.should.eql(1);
+        pendingTransaction.signers.should.containEql(accounts[1]);
       });
     });
 
@@ -495,7 +630,7 @@ contract('Wallet', function(accounts) {
       var operationHash;
 
       // Send ether out of the wallet contract
-      return wallet.execute(accounts[2], web3.toWei(10, "ether"), "", { from: accounts[1] })
+      return wallet.execute(accounts[2], web3.toWei(12, "ether"), "", { from: accounts[1] })
       .then(function() {
         // Check other account balance
         var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
@@ -513,7 +648,7 @@ contract('Wallet', function(accounts) {
           return event.event === 'ConfirmationNeeded';
         });
         confirmationNeededEvent.args.initiator.should.eql(accounts[1]);
-        confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(10, "ether")));
+        confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(12, "ether")));
         confirmationNeededEvent.args.to.should.eql(accounts[2]);
         operationHash = confirmationNeededEvent.args.operation;
         return wallet.confirm(operationHash, { from: accounts[9] });
@@ -526,6 +661,12 @@ contract('Wallet', function(accounts) {
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
+        return getPendingTransactions(wallet);
+      })
+      .then(function (pendingTransactions) {
+        pendingTransactions.length.should.eql(2);
+        pendingTransactions[0].value.should.eql(web3.toBigNumber(web3.toWei(11, "ether")));
+        pendingTransactions[1].value.should.eql(web3.toBigNumber(web3.toWei(12, "ether")));
       });
     });
 
@@ -534,8 +675,8 @@ contract('Wallet', function(accounts) {
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
 
       // Send 25 ether out of the wallet contract
-      return wallet.execute(accounts[2], web3.toWei(25, "ether"), "", { from: accounts[9] })
-      .then(function() {
+      return wallet.execute(accounts[2], web3.toWei(13, "ether"), "", {from: accounts[9]})
+      .then(function () {
         // Check other account balance
         var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
@@ -544,9 +685,9 @@ contract('Wallet', function(accounts) {
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
 
-        return wallet.execute(accounts[2], web3.toWei(25, "ether"), "", { from: accounts[1] });
+        return wallet.execute(accounts[2], web3.toWei(13, "ether"), "", {from: accounts[1]});
       })
-      .then(function() {
+      .then(function () {
         // Check other account balance
         var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(accounts[2]), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
@@ -554,6 +695,43 @@ contract('Wallet', function(accounts) {
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function (pendingTransactions) {
+        pendingTransactions.length.should.eql(3);
+        pendingTransactions[0].value.should.eql(web3.toBigNumber(web3.toWei(11, "ether")));
+        pendingTransactions[1].value.should.eql(web3.toBigNumber(web3.toWei(12, "ether")));
+        pendingTransactions[2].value.should.eql(web3.toBigNumber(web3.toWei(13, "ether")));
+      });
+    });
+
+    it("Confirm a previous pending transaction that was not the last ConfirmationNeeded", function () {
+      var otherAccount = accounts[2];
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+      var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+
+      var pendingTransactions;
+      return getPendingTransactions(wallet)
+      .then(function(result) {
+        pendingTransactions = result;
+        return wallet.confirm(pendingTransactions[0].operation);
+      })
+      .then(function () {
+        // Check other account balance
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+        otherAccountStartEther.plus(web3.fromWei(pendingTransactions[0].value, "ether")).should.eql(otherAccountEndEther);
+
+        // Check wallet balance
+        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        msigWalletStartEther.minus(web3.fromWei(pendingTransactions[0].value, "ether")).should.eql(msigWalletEndEther);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function (pendingTransactions) {
+        pendingTransactions.length.should.eql(2);
+        pendingTransactions[0].value.should.eql(web3.toBigNumber(web3.toWei(12, "ether")));
+        pendingTransactions[1].value.should.eql(web3.toBigNumber(web3.toWei(13, "ether")));
       });
     });
   });
@@ -1335,13 +1513,15 @@ contract('Wallet', function(accounts) {
           wallet.m_numOwners.call(),
           wallet.m_required.call(),
           wallet.isOwner.call(accounts[9]),
-          getOwners(wallet)
+          getOwners(wallet),
+          getPendingTransactions(wallet)
         ]);
       })
-      .spread(function (numOwners, signaturesRequired, isOwner, owners) {
+      .spread(function (numOwners, signaturesRequired, isOwner, owners, pendingTransactions) {
         numOwners.should.eql(web3.toBigNumber(3)); // new owner not added yet
         signaturesRequired.should.eql(web3.toBigNumber(2));
         isOwner.should.eql(false);
+        pendingTransactions.length.should.eql(0);
 
         owners.should.containEql(accounts[0]);
         owners.should.containEql(accounts[1]);
@@ -1516,12 +1696,14 @@ contract('Wallet', function(accounts) {
         return Promise.all([
           wallet.m_numOwners.call(),
           wallet.isOwner.call(accounts[4]),
-          getOwners(wallet)
+          getOwners(wallet),
+          getPendingTransactions(wallet)
         ]);
       })
-      .spread(function (numOwners, isOwner, owners) {
+      .spread(function (numOwners, isOwner, owners, pendingTransactions) {
         numOwners.should.eql(web3.toBigNumber(5));
         isOwner.should.eql(true);
+        pendingTransactions.length.should.eql(0);
 
         owners.should.containEql(accounts[0]);
         owners.should.containEql(accounts[1]);
@@ -1691,8 +1873,8 @@ contract('Wallet', function(accounts) {
     });
 
     it("Changing number of required signers to 3 and make a transaction with 3 signers", function () {
-      var destionationAccount = accounts[4];
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(destionationAccount), 'ether');
+      var otherAccount = accounts[4];
+      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
       var operationHash;
       var amount = 100;
@@ -1716,11 +1898,11 @@ contract('Wallet', function(accounts) {
         requirementChangedEvent.args.newRequirement.should.eql(web3.toBigNumber(3));
 
         // Now make a transaction
-        return wallet.execute(destionationAccount, web3.toWei(amount, "ether"), "", { from: accounts[0] });
+        return wallet.execute(otherAccount, web3.toWei(amount, "ether"), "", { from: accounts[0] });
       })
       .then(function () {
         // Check that balances have not changed yet
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(destionationAccount), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
@@ -1728,30 +1910,50 @@ contract('Wallet', function(accounts) {
       })
       .then(function () {
         // Check wallet events for ConfirmationNeeded
-        var confirmationNeededEvent = _.find(walletEvents, function(event) {
+        var confirmationNeededEvent = _.find(walletEvents, function (event) {
           return event.event === 'ConfirmationNeeded';
         });
         confirmationNeededEvent.args.initiator.should.eql(accounts[0]);
         confirmationNeededEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(amount, "ether")));
-        confirmationNeededEvent.args.to.should.eql(destionationAccount);
+        confirmationNeededEvent.args.to.should.eql(otherAccount);
         operationHash = confirmationNeededEvent.args.operation;
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        var pendingTransaction =
+          _.find(pendingTransactions, function(tx) { return tx.operation === operationHash; });
+        pendingTransaction.operation.should.eql(operationHash);
+        pendingTransaction.to.should.eql(otherAccount);
+        pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(amount, "ether")));
+        pendingTransaction.signers.length.should.eql(1);
+        pendingTransaction.signers.should.containEql(accounts[0]);
 
         // Now make a confirmation from account 1
         return wallet.confirm(operationHash, { from: accounts[1] });
       })
       .then(function () {
         // Check that balances have not changed yet
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(destionationAccount), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        var pendingTransaction = pendingTransactions[pendingTransactions.length - 1];
+        pendingTransaction.to.should.eql(otherAccount);
+        pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(amount, "ether")));
+        pendingTransaction.signers.length.should.eql(2);
+        pendingTransaction.signers.should.containEql(accounts[1]);
 
         // Make the confirmation from account 2
         return wallet.confirm(operationHash, { from: accounts[2] });
       })
       .then(function() {
         // Check that balances were changed
-        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(destionationAccount), 'ether');
+        var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
         otherAccountStartEther.plus(amount).should.eql(otherAccountEndEther);
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
@@ -1953,6 +2155,11 @@ contract('Wallet', function(accounts) {
         });
         confirmationEvent.args.owner.should.eql(accounts[0]);
         confirmationEvent.args.should.have.property('operation');
+
+        return getPendingTransactions(wallet);
+      })
+      .then(function(pendingTransactions) {
+        pendingTransactions.length.should.eql(0);
 
         // this execution should not have effect since the daily limit is still 5
         return wallet.execute(accounts[2], web3.toWei(10, "ether"), "", { from: accounts[1] });
