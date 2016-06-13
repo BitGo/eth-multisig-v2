@@ -277,7 +277,7 @@ contract multiowned {
         uint8 v;
 
         if (_signature.length != 65)
-            return false;
+            throw;
 
         assembly {
             r := mload(add(_signature, 32))
@@ -315,7 +315,7 @@ contract multiowned {
             Confirmation(_owner, _operation);
             // Check if this confirmation puts us at the required number of needed confirmations.
             if (pending.yetNeeded <= 1) {
-                // Enough confirmations: reset and run interior.
+                // Enough confirmations: mark operation as passed and return true to continue execution
                 delete m_pendingIndex[m_pending[_operation].index];
                 delete m_pending[_operation];
                 return true;
@@ -516,9 +516,12 @@ contract Wallet is multisig, multiowned, daylimit {
         // We also must check that there is no data (not a contract invocation),
         // since we are unable to determine the value outcome of it.
         if (underLimit(_value) && _data.length == 0) {
+            // Yes - execute the call
+            if (!(_to.call.value(_value)(_data))) {
+              // Following guidelines, throw if the call did not succeed
+              throw;
+            }
             SingleTransact(msg.sender, _value, _to, _data);
-            // Yes - just execute the call.
-            _to.call.value(_value)(_data);
             return 0;
         }
         // Determine a unique hash for this operation
@@ -534,7 +537,9 @@ contract Wallet is multisig, multiowned, daylimit {
     // Confirm a prior transaction via the hash.
     function confirm(bytes32 _h) onlymanyowners(_h) returns (bool) {
         if (m_txs[_h].to != 0) {
-            m_txs[_h].to.call.value(m_txs[_h].value)(m_txs[_h].data);
+            if (!(m_txs[_h].to.call.value(m_txs[_h].value)(m_txs[_h].data))) {
+              throw;
+            }
             MultiTransact(msg.sender, _h, m_txs[_h].value, m_txs[_h].to, m_txs[_h].data);
             delete m_txs[_h];
             return true;
@@ -558,7 +563,9 @@ contract Wallet is multisig, multiowned, daylimit {
 
         // Confirm the operation
         if (confirmWithSenderAndECRecover(_r, _sequenceId, _signature)) {
-          _to.call.value(_value)(_data);
+          if (!(_to.call.value(_value)(_data))) {
+            throw;
+          }
           MultiTransact(msg.sender, _r, _value, _to, _data);
           return 0;
         }
