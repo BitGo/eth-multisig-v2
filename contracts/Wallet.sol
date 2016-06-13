@@ -41,11 +41,11 @@ contract multiowned {
     uint public m_numOwners;
 
     // List of owners
-    address[256] m_owners;
+    uint[256] m_owners;
     uint constant c_maxOwners = 250;
 
     // Index on the list of owners to allow reverse lookup
-    mapping(address => uint) m_ownerIndex;
+    mapping(uint => uint) m_ownerIndex;
 
     // Pending operations
     mapping(bytes32 => PendingState) m_pending;
@@ -109,38 +109,27 @@ contract multiowned {
     // The creator of the contract automatically becomes an owner, so don't add them into the list.
     function multiowned(address[] _owners, uint _required) {
         m_numOwners = _owners.length + 1;
-        m_owners[1] = msg.sender;
-        m_ownerIndex[msg.sender] = 1;
+        m_owners[1] = uint(msg.sender);
+        m_ownerIndex[uint(msg.sender)] = 1;
 
         for (uint i = 0; i < _owners.length; ++i)
         {
-            m_owners[2 + i] = _owners[i];
-            m_ownerIndex[_owners[i]] = 2 + i;
+            m_owners[2 + i] = uint(_owners[i]);
+            m_ownerIndex[uint(_owners[i])] = 2 + i;
         }
 
         m_required = _required;
     }
 
-    // Gets an owner at a certain index position
+    // Gets an owner at a certain index position. The caller will be expecting a 0-indexed number.
     function getOwner(uint ownerIndex) external returns (address) {
-        uint ownerCount = 0;
-        // m_numOwners starts at 1, so we need to loop using <= instead of <
-        for (uint i = 1; i <= m_numOwners; ++i)
-        {
-            if (m_owners[i] != 0) {
-                if (ownerIndex == ownerCount) {
-                    return m_owners[i];
-                }
-                ownerCount++;
-            }
-        }
-        return 0;
+        return address(m_owners[ownerIndex + 1]);
     }
 
     // Revokes a prior confirmation of a given operation
     function revoke(bytes32 _operation) external {
         // We could use isOwner, but we want the ownerIndex, so perform the owner check here
-        uint ownerIndex = m_ownerIndex[msg.sender];
+        uint ownerIndex = m_ownerIndex[uint(msg.sender)];
         // Make sure they're an owner
         if (ownerIndex == 0) return;
 
@@ -157,14 +146,14 @@ contract multiowned {
     function changeOwner(address _from, address _to) onlymanyowners(sha3(msg.data)) external {
         if (isOwner(_to)) return;
 
-        uint ownerIndex = m_ownerIndex[_from];
+        uint ownerIndex = m_ownerIndex[uint(_from)];
         if (ownerIndex == 0) return;
 
         clearPending();
 
-        m_owners[ownerIndex] = _to;
-        m_ownerIndex[_from] = 0;
-        m_ownerIndex[_to] = ownerIndex;
+        m_owners[ownerIndex] = uint(_to);
+        m_ownerIndex[uint(_from)] = 0;
+        m_ownerIndex[uint(_to)] = ownerIndex;
         OwnerChanged(_from, _to);
     }
 
@@ -178,20 +167,20 @@ contract multiowned {
         if (m_numOwners >= c_maxOwners) return;
 
         m_numOwners++;
-        m_owners[m_numOwners] = _owner;
-        m_ownerIndex[_owner] = m_numOwners;
+        m_owners[m_numOwners] = uint(_owner);
+        m_ownerIndex[uint(_owner)] = m_numOwners;
         OwnerAdded(_owner);
     }
 
     // Removes an owner from the contract
     function removeOwner(address _owner) onlymanyowners(sha3(msg.data)) external {
-        uint ownerIndex = m_ownerIndex[_owner];
+        uint ownerIndex = m_ownerIndex[uint(_owner)];
         if (ownerIndex == 0) return;
 
         if (m_required > m_numOwners - 1) return;
 
         m_owners[ownerIndex] = 0;
-        m_ownerIndex[_owner] = 0;
+        m_ownerIndex[uint(_owner)] = 0;
 
         clearPending();
 
@@ -211,13 +200,13 @@ contract multiowned {
 
     // Checks if the address is an owner on this contract
     function isOwner(address _addr) returns (bool) {
-      return m_ownerIndex[_addr] > 0;
+      return m_ownerIndex[uint(_addr)] > 0;
     }
 
     // Checks if an operation has been confirmed by a specified owner.
     function hasConfirmed(bytes32 _operation, address _owner) constant returns (bool) {
       var pending = m_pending[_operation];
-      uint ownerIndex = m_ownerIndex[_owner];
+      uint ownerIndex = m_ownerIndex[uint(_owner)];
 
       // First check if they're an owner
       if (ownerIndex == 0) return false;
@@ -246,7 +235,7 @@ contract multiowned {
 
     // Given an operation hash and an owner, return if the owner has confirmed that operation
     function hasOwnerConfirmedOperation(address _owner, bytes32 _operation) returns (bool) {
-        uint ownerIndex = m_ownerIndex[_owner];
+        uint ownerIndex = m_ownerIndex[uint(_owner)];
         uint ownerIndexBit = 2**ownerIndex;
         var pendingOperation = m_pending[_operation];
 
@@ -304,7 +293,7 @@ contract multiowned {
     // returns true if the operation has the required number of confirmations
     function confirmAndCheckOperationForOwner(bytes32 _operation, address _owner) private returns (bool) {
         // Determine what index the present sender is
-        uint ownerIndex = m_ownerIndex[_owner];
+        uint ownerIndex = m_ownerIndex[uint(_owner)];
         // Make sure they're an owner
         if (ownerIndex == 0) return;
 
@@ -612,7 +601,7 @@ contract Wallet is multisig, multiowned, daylimit {
 
     // Gets the destination address of a pending transaction by the operation hash
     function getPendingTransactionToAddress(bytes32 _operation) returns (address) {
-        return m_txs[_operation].to;
+        return address(m_txs[_operation].to);
     }
 
     // Gets the value in wei of a pending transaction by the operation hash
