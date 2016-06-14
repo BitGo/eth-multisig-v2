@@ -233,15 +233,6 @@ contract multiowned {
         return m_pending[_operation].yetNeeded;
     }
 
-    // Given an operation hash and an owner, return if the owner has confirmed that operation
-    function hasOwnerConfirmedOperation(address _owner, bytes32 _operation) returns (bool) {
-        uint ownerIndex = m_ownerIndex[uint(_owner)];
-        uint ownerIndexBit = 2**ownerIndex;
-        var pendingOperation = m_pending[_operation];
-
-        return (pendingOperation.ownersConfirmed & ownerIndexBit) != 0;
-    }
-
     // INTERNAL METHODS
     // Called within the onlymanyowners modifier.
     // Records a confirmation by msg.sender and returns true if the operation has the required number of confirmations

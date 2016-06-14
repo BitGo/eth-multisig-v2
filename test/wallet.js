@@ -67,7 +67,7 @@ contract('Wallet', function(accounts) {
         return wallet.getPendingTransaction.call(index)
         .then(function(operationHash) {
           /**
-           * Enumerates owners that have confirmed this operation using hasOwnerConfirmedOperation
+           * Enumerates owners that have confirmed this operation using hasConfirmed
            * @returns [] list of owner addresses that have confirmed this operation
            */
           var getSigners = function() {
@@ -75,7 +75,7 @@ contract('Wallet', function(accounts) {
             return Promise.all(
               owners.map(
                 function(ownerAddress) {
-                  return wallet.hasOwnerConfirmedOperation.call(ownerAddress, operationHash)
+                  return wallet.hasConfirmed.call(operationHash, ownerAddress)
                   .then(function(hasConfirmed) {
                     if (hasConfirmed) {
                       signers.push(ownerAddress);
@@ -411,6 +411,10 @@ contract('Wallet', function(accounts) {
         pendingTransaction.signers.length.should.eql(1);
         pendingTransaction.signers.should.containEql(accounts[1]);
 
+        return wallet.getPendingConfirmationsNeeded.call(operationHash);
+      })
+      .then(function(pendingNeeded) {
+        pendingNeeded.toString().should.eql("1");
         return wallet.confirm(operationHash, { from: accounts[0] });
       })
       .then(function() {
@@ -422,6 +426,10 @@ contract('Wallet', function(accounts) {
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(10).should.eql(msigWalletEndEther);
 
+        return wallet.getPendingConfirmationsNeeded.call(operationHash);
+      })
+      .then(function(pendingNeeded) {
+        pendingNeeded.toString().should.eql("0");
         return helpers.waitForEvents(walletEvents); // wait for events to come in
       })
       .then(function() {
