@@ -506,7 +506,7 @@ contract Wallet is multisig, multiowned, daylimit {
         // Check that we're under the daily limit - if so, execute the call
         // We also must check that there is no data (not a contract invocation),
         // since we are unable to determine the value outcome of it.
-        if (underLimit(_value) && _data.length == 0) {
+        if (underLimit(_value) && _data.length == 0 && !hasCode(_to)) {
             // Yes - execute the call
             if (!(_to.call.value(_value)(_data))) {
               // Following guidelines, throw if the call did not succeed
@@ -628,5 +628,12 @@ contract Wallet is multisig, multiowned, daylimit {
             return true;
         }
         return false;
+    }
+
+    // Used to determine if an address may execute code
+    function hasCode(address _addr) returns (bool) {
+        uint size;
+        assembly { size := extcodesize(_addr) }
+        return size > 0;
     }
 }
