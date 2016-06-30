@@ -286,7 +286,7 @@ contract multiowned {
         // Determine what index the present sender is
         uint ownerIndex = m_ownerIndex[uint(_owner)];
         // Make sure they're an owner
-        if (ownerIndex == 0) return;
+        if (ownerIndex == 0) return false;
 
         var pending = m_pending[_operation];
         // If we're not yet working on this operation, add it
@@ -451,6 +451,23 @@ contract multisig {
     function confirm(bytes32 _h) returns (bool);
 }
 
+contract Forwarder {
+  address public destinationAddress;
+
+  function Forwarder() {
+      destinationAddress = msg.sender;
+  }
+
+  // Gets called when no other function matches (coins are deposited)
+  function() {
+      destinationAddress.send(msg.value);
+  }
+
+  function flush() {
+      destinationAddress.send(this.balance);
+  }
+}
+
 /*
  Implementation of a multi-sig, multi-owned contract wallet with an optional day limit
  Usage (single signature per transaction):
@@ -499,16 +516,21 @@ contract Wallet is multisig, multiowned, daylimit {
         }
     }
 
+    // Create a new contract (and also address) that forwards funds to this contract
+    function createForwarder() external onlyowner returns (address) {
+      return new Forwarder();
+    }
+
     // Executes transaction immediately if below daily spend limit.
     // If not, goes into multisig process where a confirmation is needed by another user.
     // We return an operation hash additional confirmations (also exposed on ConfirmationNeeded event)
-    function execute(address _to, uint _value, bytes _data) external onlyowner returns (bytes32 _r) {
+    function execute(address _to, uint _value, bytes _data) external onlyowner returns (bytes32) {
         // Check that we're under the daily limit - if so, execute the call
         // We also must check that there is no data (not a contract invocation),
         // since we are unable to determine the value outcome of it.
         if (underLimit(_value) && _data.length == 0 && !hasCode(_to)) {
             // Yes - execute the call
-            if (!(_to.call.value(_value)(_data))) {
+            if (!(_to.send(_value))) {
               // Following guidelines, throw if the call did not succeed
               throw;
             }
@@ -516,13 +538,14 @@ contract Wallet is multisig, multiowned, daylimit {
             return 0;
         }
         // Determine a unique hash for this operation
-        _r = sha3(msg.data, block.number);
-        if (!confirm(_r) && m_txs[_r].to == 0) {
-            m_txs[_r].to = _to;
-            m_txs[_r].value = _value;
-            m_txs[_r].data = _data;
-            ConfirmationNeeded(_r, msg.sender, _value, _to, _data);
+        var operationHash = sha3(msg.data, block.number);
+        if (!confirm(operationHash) && m_txs[operationHash].to == 0) {
+            m_txs[operationHash].to = _to;
+            m_txs[operationHash].value = _value;
+            m_txs[operationHash].data = _data;
+            ConfirmationNeeded(operationHash, msg.sender, _value, _to, _data);
         }
+        return operationHash;
     }
 
     // Confirm a prior transaction via the hash.
@@ -535,6 +558,7 @@ contract Wallet is multisig, multiowned, daylimit {
             delete m_txs[_h];
             return true;
         }
+        return false;
     }
 
     // Execute and confirm a transaction with 2 signatures - one using the msg.sender and another using ecrecover
@@ -542,29 +566,29 @@ contract Wallet is multisig, multiowned, daylimit {
     // Sequence IDs are numbers starting from 1. They used to prevent replay attacks and may not be repeated.
     function executeAndConfirm(address _to, uint _value, bytes _data, uint _expireTime, uint _sequenceId, bytes _signature)
         external onlyowner
-        returns (bytes32 _r)
+        returns (bytes32)
     {
-        // Determine the hash for this operation
         if (_expireTime < block.timestamp) {
           throw;
         }
 
         // The unique hash is the combination of all arguments except the signature
-        _r = sha3(_to, _value, _data, _expireTime, _sequenceId);
+        var operationHash = sha3(_to, _value, _data, _expireTime, _sequenceId);
 
         // Confirm the operation
-        if (confirmWithSenderAndECRecover(_r, _sequenceId, _signature)) {
+        if (confirmWithSenderAndECRecover(operationHash, _sequenceId, _signature)) {
           if (!(_to.call.value(_value)(_data))) {
             throw;
           }
-          MultiTransact(msg.sender, _r, _value, _to, _data);
+          MultiTransact(msg.sender, operationHash, _value, _to, _data);
           return 0;
         }
 
-        m_txs[_r].to = _to;
-        m_txs[_r].value = _value;
-        m_txs[_r].data = _data;
-        ConfirmationNeeded(_r, msg.sender, _value, _to, _data);
+        m_txs[operationHash].to = _to;
+        m_txs[operationHash].value = _value;
+        m_txs[operationHash].data = _data;
+        ConfirmationNeeded(operationHash, msg.sender, _value, _to, _data);
+        return operationHash;
     }
 
     // Gets the number of pending transactions

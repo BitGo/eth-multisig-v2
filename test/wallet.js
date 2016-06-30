@@ -8,6 +8,7 @@ var helpers = require('./helpers');
 
 // Used to build the solidity tightly packed buffer to sha3
 var abi = require('ethereumjs-abi');
+var util = require('ethereumjs-util');
 var crypto = require('crypto');
 var BN = require('bn.js');
 
@@ -111,8 +112,6 @@ contract('Wallet', function(accounts) {
       return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
       .then(function(result) {
         wallet = result;
-        console.log("Wallet address: " + result.address);
-
         // Check numerical constants
         return Promise.all([
           wallet.m_numOwners.call(),
@@ -217,6 +216,107 @@ contract('Wallet', function(accounts) {
         });
         depositEvent.args._from.should.eql(accounts[0]);
         depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(2000, "ether")));
+      });
+    });
+  });
+
+  describe("Forwarder contract", function() {
+    var forwardAbi = [{"constant":false,"inputs":[],"name":"flush","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"destinationAddress","outputs":[{"name":"","type":"address"}],"type":"function"},{"inputs":[],"type":"constructor"}];
+    var forwardContract = web3.eth.contract(forwardAbi);
+
+    it("Create and forward", function () {
+      var forwarderContractAddress;
+      var wallet;
+      return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
+      .then(function(result) {
+        wallet = result;
+        forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+        return wallet.createForwarder({ from: accounts[0] });
+      })
+      .then(function(txHash) {
+        var tx = web3.eth.getTransaction(txHash);
+        var txReceipt = web3.eth.getTransactionReceipt(txHash);
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+        return web3.eth.sendTransaction({from: accounts[1], to: forwarderContractAddress, value: web3.toWei(200, "ether")});
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200));
+      });
+    });
+
+    it("Multiple forward contracts", function () {
+      var wallet;
+      var numForwardAddresses = 10;
+      var etherEachSend = 4;
+      return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
+      .then(function(result) {
+        wallet = result;
+        // Create forwarder contracts first
+        var createForwarderPromiseArray = _.range(numForwardAddresses).map(function() {
+          return wallet.createForwarder({ from: accounts[0] });
+        });
+        return Promise.resolve(createForwarderPromiseArray);
+      })
+      .then(function() {
+        // Send 4 ether to each of the addresses
+        _.range(numForwardAddresses).map(function(nonce) {
+          var forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, nonce));
+          return web3.eth.sendTransaction({from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, "ether")});
+        });
+      })
+      .then(function() {
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(etherEachSend * numForwardAddresses));
+      });
+    });
+
+    it("Send before create, then flush", function () {
+      var wallet;
+      var forwarderContractAddress;
+      return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
+      .then(function(result) {
+        wallet = result;
+        forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+        return web3.eth.sendTransaction({from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, "ether")});
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
+        return wallet.createForwarder({ from: accounts[0] });
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
+        return forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
+      });
+    });
+
+    it("Flush sent from external account", function () {
+      var wallet;
+      var forwarderContractAddress;
+      return Wallet.new([accounts[1], accounts[2]], 2, web3.toWei(0, "ether"), {from: accounts[0]})
+      .then(function(result) {
+        wallet = result;
+        forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+        return web3.eth.sendTransaction({from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, "ether")});
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
+        return wallet.createForwarder({ from: accounts[0] });
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
+        return forwardContract.at(forwarderContractAddress).flush({ from: accounts[9] });
+      })
+      .then(function(txHash) {
+        web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+        web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
       });
     });
   });
