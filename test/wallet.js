@@ -51,9 +51,7 @@ contract('Wallet', function(accounts) {
   };
 
   /**
-   * Helper method to get pending transactions on the wallet
-   * Will enumerate these properties using getPendingTransaction,
-   * getPendingTransactionToAddress, getPendingTransactionValue etc.
+   * Helper method to get pending transactions on the wallet.
    *
    * @param wallet
    * @returns object with properties of the wallet
@@ -66,7 +64,7 @@ contract('Wallet', function(accounts) {
     .spread(function(owners, numPendingTransactions) {
       var getPendingTransaction = function(index) {
         return wallet.getPendingTransaction.call(index)
-        .then(function(operationHash) {
+        .then(function(pendingTransactionTuple) {
           /**
            * Enumerates owners that have confirmed this operation using hasConfirmed
            * @returns [] list of owner addresses that have confirmed this operation
@@ -90,12 +88,15 @@ contract('Wallet', function(accounts) {
             })
           };
 
+          var operationHash = pendingTransactionTuple[0];
           operationHash.should.not.eql("");
+
           return Promise.props({
-            operation: operationHash,
-            to: wallet.getPendingTransactionToAddress.call(operationHash),
-            value: wallet.getPendingTransactionValue.call(operationHash),
-            data: wallet.getPendingTransactionData.call(operationHash),
+            operation: pendingTransactionTuple[0],
+            confirmationsNeeded: pendingTransactionTuple[1],
+            to: pendingTransactionTuple[2],
+            value: pendingTransactionTuple[3],
+            data: pendingTransactionTuple[4],
             signers: getSigners()
           });
         });
@@ -510,11 +511,8 @@ contract('Wallet', function(accounts) {
         pendingTransaction.data.should.eql("0x");
         pendingTransaction.signers.length.should.eql(1);
         pendingTransaction.signers.should.containEql(accounts[1]);
+        pendingTransaction.confirmationsNeeded.toString().should.eql("1");
 
-        return wallet.getPendingConfirmationsNeeded.call(operationHash);
-      })
-      .then(function(pendingNeeded) {
-        pendingNeeded.toString().should.eql("1");
         return wallet.confirm(operationHash, { from: accounts[0] });
       })
       .then(function() {
@@ -526,10 +524,6 @@ contract('Wallet', function(accounts) {
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(10).should.eql(msigWalletEndEther);
 
-        return wallet.getPendingConfirmationsNeeded.call(operationHash);
-      })
-      .then(function(pendingNeeded) {
-        pendingNeeded.toString().should.eql("0");
         return helpers.waitForEvents(walletEvents); // wait for events to come in
       })
       .then(function() {
@@ -646,6 +640,7 @@ contract('Wallet', function(accounts) {
         pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(0, "ether")));
         pendingTransaction.signers.length.should.eql(1);
         pendingTransaction.signers.should.containEql(accounts[1]);
+        pendingTransaction.confirmationsNeeded.toString().should.eql("1");
 
         return wallet.confirm(operationHash, { from: accounts[2] });
       })
@@ -718,6 +713,7 @@ contract('Wallet', function(accounts) {
         pendingTransaction.data.should.eql("0xab3456");
         pendingTransaction.signers.length.should.eql(1);
         pendingTransaction.signers.should.containEql(accounts[1]);
+        pendingTransaction.confirmationsNeeded.toString().should.eql("1");
 
         return wallet.confirm(operationHash, { from: otherAccount });
       })
@@ -799,6 +795,7 @@ contract('Wallet', function(accounts) {
         pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(11, "ether")));
         pendingTransaction.signers.length.should.eql(1);
         pendingTransaction.signers.should.containEql(accounts[1]);
+        pendingTransaction.confirmationsNeeded.toString().should.eql("1");
       });
     });
 
@@ -2106,6 +2103,7 @@ contract('Wallet', function(accounts) {
         pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(amount, "ether")));
         pendingTransaction.signers.length.should.eql(1);
         pendingTransaction.signers.should.containEql(accounts[0]);
+        pendingTransaction.confirmationsNeeded.toString().should.eql("2");
 
         // Now make a confirmation from account 1
         return wallet.confirm(operationHash, { from: accounts[1] });
@@ -2125,6 +2123,7 @@ contract('Wallet', function(accounts) {
         pendingTransaction.value.should.eql(web3.toBigNumber(web3.toWei(amount, "ether")));
         pendingTransaction.signers.length.should.eql(2);
         pendingTransaction.signers.should.containEql(accounts[1]);
+        pendingTransaction.confirmationsNeeded.toString().should.eql("1");
 
         // Make the confirmation from account 2
         return wallet.confirm(operationHash, { from: accounts[2] });

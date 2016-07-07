@@ -228,11 +228,6 @@ contract multiowned {
       return highestSequenceId + 1;
     }
 
-    // Given an operation hash, get the number of confirmations needed
-    function getPendingConfirmationsNeeded(bytes32 _operation) returns (uint) {
-        return m_pending[_operation].yetNeeded;
-    }
-
     // INTERNAL METHODS
     // Called within the onlymanyowners modifier.
     // Records a confirmation by msg.sender and returns true if the operation has the required number of confirmations
@@ -606,34 +601,22 @@ contract Wallet is multisig, multiowned, daylimit {
         return pendingTransactionsCount;
     }
 
-    // Gets the hash of a pending operation at the specified index
-    function getPendingTransaction(uint _index) returns (bytes32) {
+    // Gets the pending operation at a specified index
+    // Will return a tuple [bytes32 operationHash, uint confirmationsNeeded, address toAddress, uint transactionValue, bytes data]
+    function getPendingTransaction(uint _index) returns (bytes32, uint, address, uint, bytes) {
         var pendingTransactionsCount = 0;
         // Seek through all of m_pendingIndex (used in the multiowned contract)
         // But only count transactions
         for (uint i = 0; i < m_pendingIndex.length; i++) {
             if (isPendingTransaction(i)) {
                 if (_index == pendingTransactionsCount) {
-                    return m_pendingIndex[i];
+                  // Found the pending transaction, return it.
+                  var operationHash = m_pendingIndex[i];
+                  return (operationHash, m_pending[operationHash].yetNeeded, address(m_txs[operationHash].to), m_txs[operationHash].value, m_txs[operationHash].data);
                 }
                 pendingTransactionsCount++;
             }
         }
-    }
-
-    // Gets the destination address of a pending transaction by the operation hash
-    function getPendingTransactionToAddress(bytes32 _operation) returns (address) {
-        return address(m_txs[_operation].to);
-    }
-
-    // Gets the value in wei of a pending transaction by the operation hash
-    function getPendingTransactionValue(bytes32 _operation) returns (uint) {
-        return m_txs[_operation].value;
-    }
-
-    // Gets the proposed data of a pending transaction by the operation hash
-    function getPendingTransactionData(bytes32 _operation) returns (bytes) {
-        return m_txs[_operation].data;
     }
 
     // INTERNAL METHODS
