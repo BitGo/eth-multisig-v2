@@ -1,15 +1,28 @@
+/**
+ * Contract that will forward any incoming Ether to its creator
+ */
 contract Forwarder {
-	address public destinationAddress;
+  // Address to which any funds sent to this contract will be forwarded
+  address public destinationAddress;
 
-	function Forwarder() {
+  /**
+   * Create the contract, and set the destination address to that of the creator
+   */
+  function Forwarder() {
     destinationAddress = msg.sender;
-	}
+  }
 
-  // Gets called when no other function matches (coins are deposited)
+  /**
+   * Default function; Gets called when Ether is deposited, and forwards it to the destination address
+   */
   function() {
     destinationAddress.send(msg.value);
   }
 
+  /**
+   * It is possible that funds were sent to this address before the contract was deployed.
+   * We can flush those funds to the destination address.
+   */
   function flush() {
     destinationAddress.send(this.balance);
   }

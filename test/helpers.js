@@ -1,3 +1,6 @@
+var abi = require('ethereumjs-abi');
+var BN = require('bn.js');
+
 exports.showBalances = function() {
   var accounts = web3.eth.accounts;
   for (var i=0; i<accounts.length; i++) {
@@ -28,4 +31,12 @@ exports.waitForEvents = function(eventsArray, numEvents) {
     .then(pollForEvents);
   };
   return pollForEvents();
+};
+
+// Helper to get sha3 for solidity tightly-packed arguments
+exports.getSha3ForConfirmationTx = function(toAddress, amount, data, expireTime, sequenceId) {
+  return abi.soliditySHA3(
+    [ "address", "uint", "string", "uint", "uint" ],
+    [ new BN(toAddress.replace("0x", ""), 16), web3.toWei(amount, "ether"), data, expireTime, sequenceId ]
+  ).toString('hex');
 };
