@@ -220,7 +220,7 @@ contract multiowned {
     // Gets the next available sequence ID for signing when using confirmAndCheckUsingECRecover
     function getNextSequenceId() returns (uint) {
       uint highestSequenceId = 0;
-      for (var i = 0; i < c_maxSequenceIdWindowSize; i++) {
+      for (uint i = 0; i < c_maxSequenceIdWindowSize; i++) {
         if (m_sequenceIdsUsed[i] > highestSequenceId) {
           highestSequenceId = m_sequenceIdsUsed[i];
         }
@@ -241,7 +241,7 @@ contract multiowned {
         // Verify that the sequence id has not been used before
         // Create mapping of the sequence ids being used
         uint lowestValueIndex = 0;
-        for (var i = 0; i < c_maxSequenceIdWindowSize; i++) {
+        for (uint i = 0; i < c_maxSequenceIdWindowSize; i++) {
           if (m_sequenceIdsUsed[i] == _sequenceId) {
             // This sequence ID has been used before. Disallow!
             throw;
@@ -269,6 +269,11 @@ contract multiowned {
             r := mload(add(_signature, 32))
             s := mload(add(_signature, 64))
             v := and(mload(add(_signature, 65)), 255)
+        }
+
+        // Ethereum versions are 27 or 28 as opposed to 0 or 1 which is submitted by some libraries
+        if (v < 27) {
+            v += 27;
         }
 
         var ownerAddress = ecrecover(_operation, v, r, s);
@@ -588,7 +593,7 @@ contract Wallet is multisig, multiowned, daylimit {
 
     // Gets the number of pending transactions
     function numPendingTransactions() returns (uint) {
-        var pendingTransactionsCount = 0;
+        uint pendingTransactionsCount = 0;
         // Use m_pendingIndex.length to get all hashes, then count how many of the
         // operations are transactions, because we don't want to store hashes twice
         // and this is a local call anyway
@@ -603,8 +608,8 @@ contract Wallet is multisig, multiowned, daylimit {
 
     // Gets the pending operation at a specified index
     // Will return a tuple [bytes32 operationHash, uint confirmationsNeeded, address toAddress, uint transactionValue, bytes data]
-    function getPendingTransaction(uint _index) returns (bytes32, uint, address, uint, bytes) {
-        var pendingTransactionsCount = 0;
+    function getPendingTransaction(uint _index) constant returns (bytes32 _operationHash, uint _confirmationsNeeded, address _toAddress, uint _transactionValue, bytes _data) {
+        uint pendingTransactionsCount = 0;
         // Seek through all of m_pendingIndex (used in the multiowned contract)
         // But only count transactions
         for (uint i = 0; i < m_pendingIndex.length; i++) {

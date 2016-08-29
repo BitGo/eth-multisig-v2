@@ -257,13 +257,13 @@ contract('Wallet', function(accounts) {
         var createForwarderPromiseArray = _.range(numForwardAddresses).map(function() {
           return wallet.createForwarder({ from: accounts[0] });
         });
-        return Promise.resolve(createForwarderPromiseArray);
+        return Promise.all(createForwarderPromiseArray);
       })
       .then(function() {
         // Send 4 ether to each of the addresses
         _.range(numForwardAddresses).map(function(nonce) {
           var forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, nonce));
-          return web3.eth.sendTransaction({from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, "ether")});
+          web3.eth.sendTransaction({from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, "ether")});
         });
       })
       .then(function() {
@@ -672,13 +672,18 @@ contract('Wallet', function(accounts) {
     });
 
     it("All transactions with data should require multiple confirmations", function () {
-      var otherAccount = accounts[2];
-      var otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+      var otherAccount;
+      var otherAccountStartEther;
       var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
       var operationHash;
 
-      // Send data out of the wallet contract
-      return wallet.execute(otherAccount, web3.toWei(0, "ether"), "0xab3456", { from: accounts[1] })
+      return Wallet.new([accounts[3], accounts[4]], 2, web3.toWei(0, "ether"), { from: accounts[5] })
+      .then(function(otherWallet) {
+        otherAccount = otherWallet.address;
+        otherAccountStartEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
+        // Send to other contract
+        return wallet.execute(otherAccount, web3.toWei(0, "ether"), "0xab3456", { from: accounts[1] })
+      })
       .then(function() {
         // Check other account balance
         var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
@@ -715,7 +720,7 @@ contract('Wallet', function(accounts) {
         pendingTransaction.signers.should.containEql(accounts[1]);
         pendingTransaction.confirmationsNeeded.toString().should.eql("1");
 
-        return wallet.confirm(operationHash, { from: otherAccount });
+        return wallet.confirm(operationHash, { from: accounts[0] });
       })
       .then(function(txHash) {
         // need to get tx/txReceipt to subtract gas*gasPrice (the network fee) from account 2 balance
@@ -724,7 +729,7 @@ contract('Wallet', function(accounts) {
         var feePaid = web3.fromWei(tx.gasPrice.times(txReceipt.gasUsed), 'ether');
         // Check other account balance
         var otherAccountEndEther = web3.fromWei(web3.eth.getBalance(otherAccount), 'ether');
-        otherAccountStartEther.plus(0).minus(feePaid).should.eql(otherAccountEndEther);
+        otherAccountStartEther.plus(0).should.eql(otherAccountEndEther);
 
         // Check wallet balance
         var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
@@ -737,7 +742,7 @@ contract('Wallet', function(accounts) {
         var multiTransactEvent = _.find(walletEvents, function(event) {
           return event.event === 'MultiTransact';
         });
-        multiTransactEvent.args.owner.should.eql(otherAccount);
+        multiTransactEvent.args.owner.should.eql(accounts[0]);
         multiTransactEvent.args.operation.should.eql(operationHash);
         multiTransactEvent.args.data.should.eql("0xab3456");
         multiTransactEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(0, "ether")));

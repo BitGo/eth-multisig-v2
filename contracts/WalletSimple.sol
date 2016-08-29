@@ -156,6 +156,9 @@ contract WalletSimple {
       s := mload(add(signature, 64))
       v := and(mload(add(signature, 65)), 255)
     }
+    if (v < 27) {
+      v += 27; // Ethereum versions are 27 or 28 as opposed to 0 or 1 which is submitted by some signing libs
+    }
     return ecrecover(operationHash, v, r, s);
   }
 
@@ -167,7 +170,7 @@ contract WalletSimple {
   function tryInsertSequenceId(uint sequenceId) onlysigner returns (uint) {
     // Keep a pointer to the lowest value element in the window
     uint lowestValueIndex = 0;
-    for (var i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
+    for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
       if (recentSequenceIds[i] == sequenceId) {
         // This sequence ID has been used before. Disallow!
         throw;

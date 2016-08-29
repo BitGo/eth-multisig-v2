@@ -13,7 +13,7 @@ var util = require('ethereumjs-util');
 var crypto = require('crypto');
 var BN = require('bn.js');
 
-contract('Wallet', function(accounts) {
+contract('WalletSimple', function(accounts) {
   var wallet;
   var walletEvents;
   var watcher;
