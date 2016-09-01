@@ -167,7 +167,7 @@ contract WalletSimple {
    * We collect a window of up to 10 recent sequence ids, and allow any sequence id that is not in the window and
    * greater than the minimum element in the window.
    */
-  function tryInsertSequenceId(uint sequenceId) onlysigner returns (uint) {
+  function tryInsertSequenceId(uint sequenceId) onlysigner private returns (uint) {
     // Keep a pointer to the lowest value element in the window
     uint lowestValueIndex = 0;
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {

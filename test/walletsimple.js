@@ -182,6 +182,10 @@ contract('WalletSimple', function(accounts) {
     }));
   });
 
+  /*
+    Commented out because tryInsertSequenceId is private. Uncomment the private and tests to test this.
+    Functionality is also tested in the sendMultiSig tests.
+
   describe("Sequence ID anti-replay protection", function() {
     before(co(function *() {
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
@@ -260,6 +264,7 @@ contract('WalletSimple', function(accounts) {
       }
     }));
   });
+  */
 
   // Helper to get the operation hash, sign it, and then send it using sendMultiSig
   var sendMultiSigTestHelper = co(function *(params) {
