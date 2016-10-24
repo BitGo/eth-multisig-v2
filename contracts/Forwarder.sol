@@ -1,3 +1,4 @@
+pragma solidity ^0.4.2;
 /**
  * Contract that will forward any incoming Ether to its creator
  */
