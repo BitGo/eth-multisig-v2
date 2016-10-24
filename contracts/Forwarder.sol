@@ -15,7 +15,7 @@ contract Forwarder {
   /**
    * Default function; Gets called when Ether is deposited, and forwards it to the destination address
    */
-  function() {
+  function() payable {
     destinationAddress.send(msg.value);
   }
 
