@@ -16,7 +16,8 @@ contract Forwarder {
    * Default function; Gets called when Ether is deposited, and forwards it to the destination address
    */
   function() payable {
-    destinationAddress.send(msg.value);
+        if (!destinationAddress.send(msg.value))
+            throw;
   }
 
   /**
@@ -24,6 +25,7 @@ contract Forwarder {
    * We can flush those funds to the destination address.
    */
   function flush() {
-    destinationAddress.send(this.balance);
+    if (!destinationAddress.send(this.balance))
+          throw;
   }
 }
