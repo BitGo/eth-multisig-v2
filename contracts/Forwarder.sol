@@ -1,3 +1,4 @@
+pragma solidity ^0.4.2;
 /**
  * Contract that will forward any incoming Ether to its creator
  */
@@ -15,8 +16,9 @@ contract Forwarder {
   /**
    * Default function; Gets called when Ether is deposited, and forwards it to the destination address
    */
-  function() {
-    destinationAddress.send(msg.value);
+  function() payable {
+        if (!destinationAddress.send(msg.value))
+            throw;
   }
 
   /**
@@ -24,6 +26,7 @@ contract Forwarder {
    * We can flush those funds to the destination address.
    */
   function flush() {
-    destinationAddress.send(this.balance);
+    if (!destinationAddress.send(this.balance))
+          throw;
   }
 }
