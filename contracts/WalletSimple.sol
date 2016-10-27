@@ -32,7 +32,7 @@ contract WalletSimple {
     if (!isSigner(msg.sender)) {
       throw;
     }
-    _
+    _;
   }
 
   /**
@@ -54,7 +54,7 @@ contract WalletSimple {
   /**
    * Gets called when a transaction is received without calling a method
    */
-  function() {
+  function() payable {
     if (msg.value > 0) {
       // Fire deposited event if we are receiving funds
       Deposited(msg.sender, msg.value, msg.data);

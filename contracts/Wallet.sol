@@ -93,14 +93,14 @@ contract multiowned {
     // Ensures that msg.sender is an owner (as specified in the constructor)
     modifier onlyowner {
         if (isOwner(msg.sender))
-            _
+            _;
     }
 
     // Ensures that the set number (specified in constructor) of owners have confirmed the operation before execution.
     // The operation is uniquely identified as a 32-byte hash provided to the modifier
     modifier onlymanyowners(bytes32 _operation) {
         if (confirmAndCheck(_operation))
-            _
+            _;
     }
 
     // METHODS
@@ -380,7 +380,7 @@ contract daylimit is multiowned {
     // Simple modifier for daily limit.
     modifier limitedDaily(uint _value) {
         if (underLimit(_value))
-            _
+            _;
     }
 
     // METHODS
@@ -459,7 +459,7 @@ contract Forwarder {
   }
 
   // Gets called when no other function matches (coins are deposited)
-  function() {
+  function() payable {
       destinationAddress.send(msg.value);
   }
 
@@ -509,7 +509,7 @@ contract Wallet is multisig, multiowned, daylimit {
     }
 
     // Gets called when no other function matches (coins are deposited)
-    function() {
+    function() payable {
         // just being sent some cash?
         if (msg.value > 0) {
             Deposit(msg.sender, msg.value);
