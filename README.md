@@ -20,7 +20,7 @@ This installs truffle and an Ethereum test RPC client.
 
 ## Wallet Solidity Contract
 
-Find it at [contracts/Wallet.sol](contracts/Wallet.sol)
+Find it at [contracts/WalletSimple.sol](contracts/WalletSimple.sol)
 
 ## Running tests
 

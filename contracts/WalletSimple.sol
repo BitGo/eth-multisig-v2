@@ -1,5 +1,6 @@
-import "Forwarder.sol";
-
+pragma solidity ^0.4.11;
+import "./Forwarder.sol";
+import "./ERC20Interface.sol";
 /**
  * Basic multi-signer wallet designed for use in a co-signing environment where 2 signatures are required to move funds.
  * Typically used in a 2-of-3 signing configuration. Uses ecrecover to allow for 2 signatures in a single transaction.
@@ -15,6 +16,14 @@ contract WalletSimple {
     address toAddress, // The address the transaction was sent to
     uint value, // Amount of Wei sent to the address
     bytes data // Data sent when invoking the transaction
+  );
+  event TokenTransacted(
+    address msgSender, // Address of the sender of the message initiating the transaction
+    address otherSigner, // Address of the signer (second signature) used to initiate the transaction
+    bytes32 operation, // Operation hash (sha3 of toAddress, value, tokenContractAddress, expireTime, sequenceId)
+    address toAddress, // The address the transaction was sent to
+    uint value, // Amount of Wei sent to the address
+    address tokenContractAddress // Data sent when invoking the transaction
   );
 
   // Public fields
@@ -81,6 +90,62 @@ contract WalletSimple {
    * @param signature the result of eth.sign on the operationHash sha3(toAddress, value, data, expireTime, sequenceId)
    */
   function sendMultiSig(address toAddress, uint value, bytes data, uint expireTime, uint sequenceId, bytes signature) onlysigner {
+    // Verify the other signer
+    var operationHash = sha3(toAddress, value, data, expireTime, sequenceId);
+    var otherSigner = recoverAddressFromSignature(operationHash, signature);
+    
+    if (!verifyMultiSig(toAddress, otherSigner, expireTime, sequenceId)) {
+      // Failed verification
+      throw;
+    }
+
+    // Success, send the transaction
+    if (!(toAddress.call.value(value)(data))) {
+      // Failed executing transaction
+      throw;
+    }
+    Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
+  }
+  
+  /**
+   * Execute a multi-signature token transfer from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
+   * The signature is a signed form (using eth.sign) of tightly packed toAddress, value, tokenContractAddress, expireTime and sequenceId
+   * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.
+   *
+   * @param toAddress the destination address to send an outgoing transaction
+   * @param value the amount in Wei to be sent
+   * @param tokenContractAddress the address of the erc20 token contract
+   * @param expireTime the number of seconds since 1970 for which this transaction is valid
+   * @param sequenceId the unique sequence id obtainable from getNextSequenceId
+   * @param signature the result of eth.sign on the operationHash sha3(toAddress, value, tokenContractAddress, expireTime, sequenceId)
+   */
+  function sendMultiSigToken(address toAddress, uint value, address tokenContractAddress, uint expireTime, uint sequenceId, bytes signature) onlysigner {
+    // Verify the other signer
+    var operationHash = sha3(toAddress, value, tokenContractAddress, expireTime, sequenceId);
+    var otherSigner = recoverAddressFromSignature(operationHash, signature);
+    
+    if (!verifyMultiSig(toAddress, otherSigner, expireTime, sequenceId)) {
+      // Failed verification
+      throw;
+    }
+    
+    ERC20Interface instance = ERC20Interface(tokenContractAddress);
+    if (!instance.transfer(toAddress, value)) {
+        throw;
+    }
+    TokenTransacted(msg.sender, otherSigner, operationHash, toAddress, value, tokenContractAddress);
+  }
+  
+  
+  /**
+   * Do common multisig verification for both eth sends and erc20token transfers
+   *
+   * @param toAddress the destination address to send an outgoing transaction
+   * @param otherSigner the second signer for the transaction
+   * @param expireTime the number of seconds since 1970 for which this transaction is valid
+   * @param sequenceId the unique sequence id obtainable from getNextSequenceId
+   */
+  function verifyMultiSig(address toAddress, address otherSigner, uint expireTime, uint sequenceId) returns (bool) {
     // Verify if we are in safe mode. In safe mode, the wallet can only send to signers
     if (safeMode && !isSigner(toAddress)) {
       // We are in safe mode and the toAddress is not a signer. Disallow!
@@ -95,10 +160,6 @@ contract WalletSimple {
     // Try to insert the sequence ID. Will throw if the sequence id was invalid
     tryInsertSequenceId(sequenceId);
 
-    // Verify the other signer
-    var operationHash = sha3(toAddress, value, data, expireTime, sequenceId);
-    var otherSigner = recoverAddressFromSignature(operationHash, signature);
-
     if (!isSigner(otherSigner)) {
       // Other signer not on this wallet or operation does not match arguments
       throw;
@@ -108,12 +169,7 @@ contract WalletSimple {
       throw;
     }
 
-    // Success, send the transaction
-    if (!(toAddress.call.value(value)(data))) {
-      // Failed executing transaction
-      throw;
-    }
-    Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
+    return true;
   }
 
   /**

@@ -11,7 +11,7 @@ var helpers = require('./helpers');
 // Used to build the solidity tightly packed buffer to sha3
 var util = require('ethereumjs-util');
 var crypto = require('crypto');
-var BN = require('bn.js');
+var WalletSimple = artifacts.require("./WalletSimple.sol");
 
 contract('WalletSimple', function(accounts) {
   var wallet;
