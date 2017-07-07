@@ -1,0 +1,61 @@
+{
+  "contract_name": "Forwarder",
+  "abi": [
+    {
+      "constant": false,
+      "inputs": [],
+      "name": "flush",
+      "outputs": [],
+      "payable": false,
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [],
+      "name": "destinationAddress",
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "payable": false,
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "payable": false,
+      "type": "constructor"
+    },
+    {
+      "payable": true,
+      "type": "fallback"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "Deposited",
+      "type": "event"
+    }
+  ],
+  "unlinked_binary": "0x6060604052341561000c57fe5b5b60008054600160a060020a03191633600160a060020a03161790555b5b6101a4806100396000396000f300606060405236156100305763ffffffff60e060020a6000350416636b9f96ea81146100f4578063ca32546914610106575b6100f25b60008054604051600160a060020a0390911691349136908083838082843782019150509250505060006040518083038185876187965a03f192505050151561007c5760006000fd5b7f6e89d517057028190560dd200cf6bf792842861353d1173761dfa362e1c133f033346000366040518085600160a060020a0316600160a060020a03168152602001848152602001806020018281038252848482818152602001925080828437604051920182900397509095505050505050a15b565b005b34156100fc57fe5b6100f2610132565b005b341561010e57fe5b610116610169565b60408051600160a060020a039092168252519081900360200190f35b60008054604051600160a060020a039182169230909216319181818185876187965a03f19250505015156100f05760006000fd5b5b565b600054600160a060020a0316815600a165627a7a7230582011c275659d69ba8333cde76ff846ea17f72e2eedaca023ff0b1da7eba3ce26670029",
+  "networks": {},
+  "schema_version": "0.0.5",
+  "updated_at": 1499270251832
+}

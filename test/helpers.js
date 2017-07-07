@@ -1,6 +1,6 @@
 var abi = require('ethereumjs-abi');
 var BN = require('bn.js');
-
+var Promise = require('bluebird');
 exports.showBalances = function() {
   var accounts = web3.eth.accounts;
   for (var i=0; i<accounts.length; i++) {
