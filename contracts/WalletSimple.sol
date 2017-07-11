@@ -94,7 +94,7 @@ contract WalletSimple {
     var operationHash = sha3(toAddress, value, data, expireTime, sequenceId);
     var otherSigner = recoverAddressFromSignature(operationHash, signature);
     
-    verifyMultiSig(toAddress, otherSigner, expireTime, sequenceId)
+    verifyMultiSig(toAddress, otherSigner, expireTime, sequenceId);
 
     // Success, send the transaction
     if (!(toAddress.call.value(value)(data))) {
@@ -121,7 +121,7 @@ contract WalletSimple {
     var operationHash = sha3(toAddress, value, tokenContractAddress, expireTime, sequenceId);
     var otherSigner = recoverAddressFromSignature(operationHash, signature);
     
-    verifyMultiSig(toAddress, otherSigner, expireTime, sequenceId)
+    verifyMultiSig(toAddress, otherSigner, expireTime, sequenceId);
     
     ERC20Interface instance = ERC20Interface(tokenContractAddress);
     if (!instance.transfer(toAddress, value)) {
