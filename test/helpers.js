@@ -40,3 +40,11 @@ exports.getSha3ForConfirmationTx = function(toAddress, amount, data, expireTime,
     [ new BN(toAddress.replace("0x", ""), 16), web3.toWei(amount, "ether"), data, expireTime, sequenceId ]
   ).toString('hex');
 };
+
+// Helper to get token transactions sha3 for solidity tightly-packed arguments
+exports.getSha3ForConfirmationTokenTx = function(toAddress, value, tokenContractAddress, expireTime, sequenceId) {
+  return abi.soliditySHA3(
+    [ "address", "uint", "address", "uint", "uint" ],
+    [ new BN(toAddress.replace("0x", ""), 16), value, new BN(tokenContractAddress.replace("0x", ""), 16), expireTime, sequenceId ]
+  ).toString('hex');
+};

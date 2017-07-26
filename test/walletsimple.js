@@ -12,6 +12,7 @@ var helpers = require('./helpers');
 var util = require('ethereumjs-util');
 var crypto = require('crypto');
 var WalletSimple = artifacts.require("./WalletSimple.sol");
+var FixedSupplyToken = artifacts.require("./FixedSupplyToken.sol");
 
 contract('WalletSimple', function(accounts) {
   var wallet;
@@ -75,53 +76,6 @@ contract('WalletSimple', function(accounts) {
       isSignerArray[3].should.eql(false);
     }));
 
-    it("2 of 2 multisig wallet", co(function *() {
-      var wallet = yield WalletSimple.new([accounts[0], accounts[1]]);
-
-      var signers = yield getSigners(wallet);
-      signers.should.eql([accounts[0], accounts[1]]);
-
-      var isSafeMode = yield wallet.safeMode.call();
-      isSafeMode.should.eql(false);
-
-      var isSignerArray = yield Promise.all([
-        wallet.isSigner.call(accounts[0]),
-        wallet.isSigner.call(accounts[1]),
-        wallet.isSigner.call(accounts[2]),
-        wallet.isSigner.call(accounts[3])
-      ]);
-
-      isSignerArray.length.should.eql(4);
-      isSignerArray[0].should.eql(true);
-      isSignerArray[1].should.eql(true);
-      isSignerArray[2].should.eql(false);
-      isSignerArray[3].should.eql(false);
-    }));
-
-    it("2 of 4 multisig wallet", co(function *() {
-      var wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2], accounts[8]]);
-      var signers = yield getSigners(wallet);
-      signers.should.eql([accounts[0], accounts[1], accounts[2], accounts[8]]);
-
-      var isSafeMode = yield wallet.safeMode.call();
-      isSafeMode.should.eql(false);
-
-      var isSignerArray = yield Promise.all([
-        wallet.isSigner.call(accounts[0]),
-        wallet.isSigner.call(accounts[1]),
-        wallet.isSigner.call(accounts[2]),
-        wallet.isSigner.call(accounts[8]),
-        wallet.isSigner.call(accounts[9])
-      ]);
-
-      isSignerArray.length.should.eql(5);
-      isSignerArray[0].should.eql(true);
-      isSignerArray[1].should.eql(true);
-      isSignerArray[2].should.eql(true);
-      isSignerArray[3].should.eql(true);
-      isSignerArray[4].should.eql(false);
-    }));
-
     it("Not enough signer addresses", co(function *() {
       try {
         yield WalletSimple.new([accounts[0]]);
@@ -159,6 +113,10 @@ contract('WalletSimple', function(accounts) {
     }));
   });
 
+  /*
+  Commented out because tryInsertSequenceId and recoverAddressFromSignature is private. Uncomment the private and tests to test this.
+  Functionality is also tested in the sendMultiSig tests.
+
   describe("Recover address from signature", function() {
     before(co(function *() {
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
@@ -181,10 +139,6 @@ contract('WalletSimple', function(accounts) {
       }
     }));
   });
-
-  /*
-    Commented out because tryInsertSequenceId is private. Uncomment the private and tests to test this.
-    Functionality is also tested in the sendMultiSig tests.
 
   describe("Sequence ID anti-replay protection", function() {
     before(co(function *() {
@@ -346,7 +300,6 @@ contract('WalletSimple', function(accounts) {
       web3.eth.sendTransaction({from: accounts[0], to: wallet.address, value: web3.toWei(200000, "ether")});
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200000));
     }));
-
     var sequenceId;
     beforeEach(co(function *() {
       // Run before each test. Sets the sequence ID up to be used in the tests
@@ -865,5 +818,85 @@ contract('WalletSimple', function(accounts) {
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
     }));
   });
+
+  describe("ERC20 token transfers", function() {
+    var fixedSupplyTokenContract;
+    before(co(function *() {
+      // Create and fund the wallet
+      wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
+      fixedSupplyTokenContract = yield FixedSupplyToken.new(undefined, {from: accounts[0]})
+      var balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      balance.should.eql(web3.toBigNumber(1000000));
+    }));
+
+    it("Receive and Send tokens from main wallet contract", co(function *() {
+      
+      var sendMultiSigTxHash = yield fixedSupplyTokenContract.transfer(wallet.address, 100, { from: accounts[0] });
+      var balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      balance.should.eql(web3.toBigNumber(1000000 - 100));
+      var msigWalletStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      msigWalletStartTokens.should.eql(web3.toBigNumber(100));
+      
+      var sequenceIdString = yield wallet.getNextSequenceId.call();
+      var sequenceId = parseInt(sequenceIdString);
+
+      var destinationAccount = accounts[5];
+      var amount = 50;
+      var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+
+      var destinationAccountStartTokens = yield fixedSupplyTokenContract.balanceOf.call(accounts[5]);
+      destinationAccountStartTokens.should.eql(web3.toBigNumber(0));
+
+      var operationHash = helpers.getSha3ForConfirmationTokenTx(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId);
+      var sig = web3.eth.sign(accounts[4], operationHash);
+      operationHash = "0x" + operationHash;
+  
+      var sendMultiSigTxHash = yield wallet.sendMultiSigToken(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId, sig, { from: accounts[5] });
+      var destinationAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(destinationAccount);
+      destinationAccountStartTokens.plus(amount).should.eql(destinationAccountEndTokens);
+
+      // Check wallet balance
+      var msigWalletEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      msigWalletStartTokens.minus(amount).should.eql(msigWalletEndTokens);
+      /* TODO Barath - Get event testing to work
+      yield helpers.waitForEvents(walletEvents, 3); // wait for events to come in
+      
+      // Check wallet events for Token Transacted event
+      var tokenTransactedEvent = _.find(walletEvents, function(event) {
+        return event.event === 'TokenTransacted';
+      });
+      tokenTransactedEvent.args.msgSender.should.eql(accounts[4]);
+      tokenTransactedEvent.args.otherSigner.should.eql(accounts[5]);
+      tokenTransactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash));
+      tokenTransactedEvent.args.value.should.eql(web3.toBigNumber(amount));
+      tokenTransactedEvent.args.toAddress.should.eql(destinationAccount);
+      tokenTransactedEvent.args.tokenContractAddress.should.eql(fixedSupplyTokenContract.address);
+      */
+    }));
+
+    it("Flush from Forwarder contract", co(function *() {
+      var forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      var deployTxHash = yield wallet.createForwarder({ from: accounts[4] });
+      yield fixedSupplyTokenContract.transfer(forwarderContractAddress, 100, { from: accounts[0] });
+      var balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      balance.should.eql(web3.toBigNumber(1000000 - 100 - 100));
+      
+      var forwarderContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
+      forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
+      var walletContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+
+      var sendMultiSigTxHash = yield wallet.flushForwarderTokens(forwarderContractAddress, fixedSupplyTokenContract.address, { from: accounts[5] });
+      var forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
+      forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
+
+      // Check wallet balance
+      var walletContractEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      walletContractStartTokens.plus(100).should.eql(walletContractEndTokens);
+      /* TODO Barath - Get event testing for forwarder contract token send to work
+      */
+    }));
+
+  });
+
 });
 

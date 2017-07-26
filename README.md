@@ -4,9 +4,18 @@
 
 Multi-sig contract suitable for use in wallets. 
 
-This project improves upon the original "wallet.sol" created by Gavin Wood. It also adds a few new features, notably support for synchronous (single transaction) approvals containing multiple signatures through the use of ecrecover. A test suite is included through the use of the truffle framework, providing coverage for both old and new methods of the wallet. 
+Some of the features of the contract (WalletSimple.sol)
 
-Compatibility with methods on the original wallet.sol is maintained, making it interoperable with Mist.
+1. Should work as 2-of-3 multisig
+2. Support for synchronous (single transaction) approvals containing multiple signatures through the use of ecrecover.
+3. Can deploy Forwarder contracts so that a single wallet can have multiple receive addresses. 
+4. Forwarder address contracts have the ability to flush funds which were sent to the address before the contract was created.
+5. ERC20 tokens can be flushed from the forwarder wallet to the main wallet by an signer
+6. ERC20 tokens and ether can be sent out from the main wallet through a multisig process.
+7. ‘Safe Mode’ can be set on a wallet contract which will force ETH and ERC20 token sends only to the signers
+
+
+A test suite is included through the use of the truffle framework, providing coverage for methods in the wallet.
 
 ## Installation
 

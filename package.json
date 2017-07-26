@@ -32,6 +32,5 @@
     "truffle-config": "^1.0.0",
     "truffle": "^3.3.2",
     "web3": "^0.16.0"
-  },
-  "devDependencies": {}
+  }
 }
