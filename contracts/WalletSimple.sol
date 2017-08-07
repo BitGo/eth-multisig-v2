@@ -93,7 +93,7 @@ contract WalletSimple {
    */
   function sendMultiSig(address toAddress, uint value, bytes data, uint expireTime, uint sequenceId, bytes signature) onlysigner {
     // Verify the other signer
-    var operationHash = sha3(toAddress, value, data, expireTime, sequenceId);
+    var operationHash = sha3("ETHER", toAddress, value, data, expireTime, sequenceId);
     
     var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
 
@@ -119,7 +119,7 @@ contract WalletSimple {
    */
   function sendMultiSigToken(address toAddress, uint value, address tokenContractAddress, uint expireTime, uint sequenceId, bytes signature) onlysigner {
     // Verify the other signer
-    var operationHash = sha3(toAddress, value, tokenContractAddress, expireTime, sequenceId);
+    var operationHash = sha3("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
     
     var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
     
