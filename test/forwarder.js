@@ -30,7 +30,8 @@ contract('Forwarder', function(accounts) {
     var account0StartEther;
     var account1StartEther;
     var contractCreated;
-    var gasUsed;
+    //var gasUsed;
+    
     return q()
     .then(function() {
       return web3.eth.sendTransaction({ from: accounts[0], to: accounts[1], value: web3.toWei(0, "ether") })
@@ -59,10 +60,6 @@ contract('Forwarder', function(accounts) {
       // Check that the ether is still in the forwarder address and not yet in account 0
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(5));
       account0StartEther = web3.fromWei(web3.eth.getBalance(accounts[0]), 'ether');
-      return forwardContract.flush.estimateGas(undefined, {from: accounts[0]});
-    })
-    .then(function(gas) {
-      gasUsed = gas;
       return contractCreated.flush.call(undefined, {from: accounts[0], gasPrice: 20000});
     })
     .then(function(txHash) {
