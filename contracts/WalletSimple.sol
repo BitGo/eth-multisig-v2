@@ -28,7 +28,7 @@ contract WalletSimple {
 
   // Public fields
   address[] public signers; // The addresses that can co-sign transactions on the wallet
-  bool public safeMode; // When active, wallet may only send to signer addresses
+  bool public safeMode = false; // When active, wallet may only send to signer addresses
 
   // Internal fields
   uint constant SEQUENCE_ID_WINDOW_SIZE = 10;
@@ -58,7 +58,6 @@ contract WalletSimple {
       throw;
     }
     signers = allowedSigners;
-    safeMode = false;
   }
 
   /**
@@ -250,6 +249,11 @@ contract WalletSimple {
     if (sequenceId < recentSequenceIds[lowestValueIndex]) {
       // The sequence ID being used is lower than the lowest value in the window
       // so we cannot accept it as it may have been used before
+      throw;
+    }
+    if (sequenceId > (recentSequenceIds[lowestValueIndex] + 10000)) {
+      // Block sequence IDs which are much higher than the lowest value
+      // This prevents people blocking the contract by using very large sequence IDs quickly
       throw;
     }
     recentSequenceIds[lowestValueIndex] = sequenceId;
