@@ -738,7 +738,7 @@ contract('WalletSimple', function(accounts) {
         amount: 28,
         data: "100135f123",
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
-        sequenceId: 10002
+        sequenceId: 9000
       };
 
       yield expectSuccessfulSendMultiSig(params);
