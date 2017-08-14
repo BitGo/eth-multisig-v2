@@ -2,22 +2,22 @@
 
 require('assert');
 require('should');
-var Promise = require('bluebird');
-var co = Promise.coroutine;
-var _ = require('lodash');
+const Promise = require('bluebird');
+const co = Promise.coroutine;
+const _ = require('lodash');
 
-var helpers = require('./helpers');
+const helpers = require('./helpers');
 
 // Used to build the solidity tightly packed buffer to sha3
-var util = require('ethereumjs-util');
-var crypto = require('crypto');
-var WalletSimple = artifacts.require("./WalletSimple.sol");
-var FixedSupplyToken = artifacts.require("./FixedSupplyToken.sol");
+const util = require('ethereumjs-util');
+const crypto = require('crypto');
+const WalletSimple = artifacts.require('./WalletSimple.sol');
+const FixedSupplyToken = artifacts.require('./FixedSupplyToken.sol');
 
 contract('WalletSimple', function(accounts) {
-  var wallet;
-  var walletEvents;
-  var watcher;
+  let wallet;
+  let walletEvents;
+  let watcher;
 
   // Set up and tear down events logging on all tests. the wallet will be set up in the before() of each test block.
   beforeEach(function() {
@@ -38,31 +38,31 @@ contract('WalletSimple', function(accounts) {
   // Taken from http://solidity.readthedocs.io/en/latest/frequently-asked-questions.html -
   // The automatic accessor function for a public state variable of array type only returns individual elements.
   // If you want to return the complete array, you have to manually write a function to do that.
-  var getSigners = co(function *getSigners(wallet) {
-    var signers = [];
-    var i = 0;
-    while(true) {
-      var signer = "";
-      try { signer = yield wallet.signers.call(i++); } catch (e) { }
-      if (!signer) {
+  const getSigners = co(function *getSigners(wallet) {
+    const signers = [];
+    let i = 0;
+    while (true) {
+      try {
+        const signer = yield wallet.signers.call(i++);
+        signers.push(signer);
+      } catch (e) {
         break;
       }
-      signers.push(signer);
     }
     return signers;
   });
 
-  describe("Wallet creation", function() {
-    it("2 of 3 multisig wallet", co(function *() {
-      var wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+  describe('Wallet creation', function() {
+    it('2 of 3 multisig wallet', co(function *() {
+      const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
 
-      var signers = yield getSigners(wallet);
+      const signers = yield getSigners(wallet);
       signers.should.eql([accounts[0], accounts[1], accounts[2]]);
 
-      var isSafeMode = yield wallet.safeMode.call();
+      const isSafeMode = yield wallet.safeMode.call();
       isSafeMode.should.eql(false);
 
-      var isSignerArray = yield Promise.all([
+      const isSignerArray = yield Promise.all([
         wallet.isSigner.call(accounts[0]),
         wallet.isSigner.call(accounts[1]),
         wallet.isSigner.call(accounts[2]),
@@ -76,40 +76,40 @@ contract('WalletSimple', function(accounts) {
       isSignerArray[3].should.eql(false);
     }));
 
-    it("Not enough signer addresses", co(function *() {
+    it('Not enough signer addresses', co(function *() {
       try {
         yield WalletSimple.new([accounts[0]]);
-        throw new Error("should not be here");
+        throw new Error('should not be here');
       } catch(e) {
-        e.message.should.not.containEql("should not be here");
+        e.message.should.not.containEql('should not be here');
       }
     }));
   });
 
-  describe("Deposits", function() {
+  describe('Deposits', function() {
     before(co(function *() {
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
     }));
 
-    it("Should emit event on deposit", co(function *() {
-      web3.eth.sendTransaction({from: accounts[0], to: wallet.address, value: web3.toWei(20, "ether")});
+    it('Should emit event on deposit', co(function *() {
+      web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(20, 'ether') });
       yield helpers.waitForEvents(walletEvents, 1); // wait for events to come in
-      var depositEvent = _.find(walletEvents, function(event) {
+      const depositEvent = _.find(walletEvents, function(event) {
         return event.event === 'Deposited';
       });
       depositEvent.args.from.should.eql(accounts[0]);
-      depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(20, "ether")));
+      depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(20, 'ether')));
     }));
 
-    it("Should emit event with data on deposit", co(function *() {
-      web3.eth.sendTransaction({from: accounts[0], to: wallet.address, value: web3.toWei(30, "ether"), data: "0xabcd"});
+    it('Should emit event with data on deposit', co(function *() {
+      web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(30, 'ether'), data: '0xabcd' });
       yield helpers.waitForEvents(walletEvents, 1); // wait for events to come in
-      var depositEvent = _.find(walletEvents, function(event) {
+      const depositEvent = _.find(walletEvents, function(event) {
         return event.event === 'Deposited';
       });
       depositEvent.args.from.should.eql(accounts[0]);
-      depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(30, "ether")));
-      depositEvent.args.data.should.eql("0xabcd");
+      depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(30, 'ether')));
+      depositEvent.args.data.should.eql('0xabcd');
     }));
   });
 
@@ -221,35 +221,35 @@ contract('WalletSimple', function(accounts) {
   */
 
   // Helper to get the operation hash, sign it, and then send it using sendMultiSig
-  var sendMultiSigTestHelper = co(function *(params) {
+  const sendMultiSigTestHelper = co(function *(params) {
     assert(params.msgSenderAddress);
     assert(params.otherSignerAddress);
     assert(params.wallet);
 
     assert(params.toAddress);
     assert(params.amount);
-    assert(params.data === "" || params.data);
+    assert(params.data === '' || params.data);
     assert(params.expireTime);
     assert(params.sequenceId);
 
     // For testing, allow arguments to override the parameters above,
     // as if the other signer or message sender were changing them
-    var otherSignerArgs = _.extend({}, params, params.otherSignerArgs);
-    var msgSenderArgs = _.extend({}, params, params.msgSenderArgs);
+    const otherSignerArgs = _.extend({}, params, params.otherSignerArgs);
+    const msgSenderArgs = _.extend({}, params, params.msgSenderArgs);
 
     // Get the operation hash to be signed
-    var operationHash = helpers.getSha3ForConfirmationTx(
+    const operationHash = helpers.getSha3ForConfirmationTx(
       otherSignerArgs.toAddress,
       otherSignerArgs.amount,
       otherSignerArgs.data,
       otherSignerArgs.expireTime,
       otherSignerArgs.sequenceId
     );
-    var signature = web3.eth.sign(params.otherSignerAddress, operationHash);
+    const signature = web3.eth.sign(params.otherSignerAddress, operationHash);
 
     yield params.wallet.sendMultiSig(
       msgSenderArgs.toAddress,
-      web3.toWei(msgSenderArgs.amount, "ether"),
+      web3.toWei(msgSenderArgs.amount, 'ether'),
       msgSenderArgs.data,
       msgSenderArgs.expireTime,
       msgSenderArgs.sequenceId,
@@ -259,116 +259,116 @@ contract('WalletSimple', function(accounts) {
   });
 
   // Helper to expect successful execute and confirm
-  var expectSuccessfulSendMultiSig = co(function *(params) {
-    var destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
-    var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
+  const expectSuccessfulSendMultiSig = co(function *(params) {
+    const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
+    const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
 
-    var result = yield sendMultiSigTestHelper(params);
+    const result = yield sendMultiSigTestHelper(params);
 
     // Check the post-transaction balances
-    var destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
+    const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
     destinationAccountStartEther.plus(params.amount).should.eql(destinationAccountEndEther);
-    var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
+    const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
     msigWalletStartEther.minus(params.amount).should.eql(msigWalletEndEther);
 
     return result;
   });
 
   // Helper to expect failed execute and confirm
-  var expectFailSendMultiSig = co(function *(params) {
-    var destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
-    var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
+  const expectFailSendMultiSig = co(function *(params) {
+    const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
+    const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
 
     try {
       yield sendMultiSigTestHelper(params);
-      throw new Error("should not have sent successfully");
+      throw new Error('should not have sent successfully');
     } catch(err) {
-      err.message.toString().should.startWith("Error: VM Exception");
+      err.message.toString().should.startWith('Error: VM Exception');
     }
 
     // Check the balances after the transaction
-    var destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
+    const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
     destinationAccountStartEther.plus(0).should.eql(destinationAccountEndEther);
-    var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
+    const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
     msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
   });
 
-  describe("Transaction sending using sendMultiSig", function() {
+  describe('Transaction sending using sendMultiSig', function() {
     before(co(function *() {
       // Create and fund the wallet
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      web3.eth.sendTransaction({from: accounts[0], to: wallet.address, value: web3.toWei(200000, "ether")});
+      web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(200000, 'ether') });
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200000));
     }));
-    var sequenceId;
+    let sequenceId;
     beforeEach(co(function *() {
       // Run before each test. Sets the sequence ID up to be used in the tests
-      var sequenceIdString = yield wallet.getNextSequenceId.call();
+      const sequenceIdString = yield wallet.getNextSequenceId.call();
       sequenceId = parseInt(sequenceIdString);
     }));
 
-    it("Send out 50 ether with sendMultiSig", co(function *() {
+    it('Send out 50 ether with sendMultiSig', co(function *() {
       // We are not using the helper here because we want to check the operation hash in events
-      var destinationAccount = accounts[5];
-      var amount = 50;
-      var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
-      var data = "abcde35f123";
+      const destinationAccount = accounts[5];
+      const amount = 50;
+      const expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+      const data = 'abcde35f123';
 
-      var destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
-      var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+      const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+      const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
 
-      var operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-      var sig = web3.eth.sign(accounts[1], operationHash);
-      operationHash = "0x" + operationHash;
+      let operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
+      const sig = web3.eth.sign(accounts[1], operationHash);
+      operationHash = '0x' + operationHash;
 
-      var sendMultiSigTxHash = yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, { from: accounts[0] });
-      var destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+      yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[0] });
+      const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
       destinationAccountStartEther.plus(amount).should.eql(destinationAccountEndEther);
 
       // Check wallet balance
-      var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+      const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
       msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
 
       yield helpers.waitForEvents(walletEvents, 2); // wait for events to come in
 
       // Check wallet events for Transacted event
-      var transactedEvent = _.find(walletEvents, function(event) {
+      const transactedEvent = _.find(walletEvents, function(event) {
         return event.event === 'Transacted';
       });
       transactedEvent.args.msgSender.should.eql(accounts[0]);
       transactedEvent.args.otherSigner.should.eql(accounts[1]);
       transactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash));
-      transactedEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(amount, "ether")));
+      transactedEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(amount, 'ether')));
       transactedEvent.args.toAddress.should.eql(destinationAccount);
       transactedEvent.args.data.should.eql(util.addHexPrefix(new Buffer(data).toString('hex')));
     }));
 
-    it("Stress test: 20 rounds of sendMultiSig", co(function *() {
-      for (var round=0; round < 20; round++) {
-        var destinationAccount = accounts[2];
-        var amount = _.random(1,9);
-        var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
-        var data = crypto.randomBytes(20).toString('hex');
+    it('Stress test: 20 rounds of sendMultiSig', co(function *() {
+      for (let round=0; round < 20; round++) {
+        const destinationAccount = accounts[2];
+        const amount = _.random(1,9);
+        const expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+        const data = crypto.randomBytes(20).toString('hex');
 
-        var operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-        var sig = web3.eth.sign(accounts[0], operationHash);
+        const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
+        const sig = web3.eth.sign(accounts[0], operationHash);
         if (sig.length !== 132) {
           // TestRPC is signing incorrectly (returning unpadded sigs)
           continue;
         }
 
-        console.log("ExpectSuccess " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
+        console.log('ExpectSuccess ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId + ', operationHash: ' + operationHash + ', sig: ' + sig);
 
-        var destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
-        var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-        yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, { from: accounts[1] });
+        const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+        const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[1] });
 
         // Check other account balance
-        var destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+        const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         destinationAccountStartEther.plus(amount).should.eql(destinationAccountEndEther);
 
         // Check wallet balance
-        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
 
         // Increment sequence id
@@ -376,37 +376,37 @@ contract('WalletSimple', function(accounts) {
       }
     }));
 
-    it("Stress test: 10 rounds of attempting to reuse sequence ids - should fail", co(function *() {
+    it('Stress test: 10 rounds of attempting to reuse sequence ids - should fail', co(function *() {
       sequenceId -= 10; // these sequence ids already used
-      for (var round=0; round < 10; round++) {
-        var destinationAccount = accounts[2];
-        var amount = _.random(1,9);
-        var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
-        var data = crypto.randomBytes(20).toString('hex');
+      for (let round=0; round < 10; round++) {
+        const destinationAccount = accounts[2];
+        const amount = _.random(1,9);
+        const expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+        const data = crypto.randomBytes(20).toString('hex');
 
-        var operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-        var sig = web3.eth.sign(accounts[0], operationHash);
+        const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
+        const sig = web3.eth.sign(accounts[0], operationHash);
         if (sig.length !== 132) {
           // TestRPC is signing incorrectly (returning unpadded sigs)
           continue;
         }
 
-        console.log("ExpectFail " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
-        var destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
-        var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        console.log('ExpectFail ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId + ', operationHash: ' + operationHash + ', sig: ' + sig);
+        const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+        const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         try {
-          yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, { from: accounts[1] });
-          throw new Error("should not be here");
+          yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[1] });
+          throw new Error('should not be here');
         } catch(err) {
-          err.message.toString().should.startWith("Error: VM Exception");
+          err.message.toString().should.startWith('Error: VM Exception');
         }
 
         // Check other account balance
-        var destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+        const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         destinationAccountStartEther.plus(0).should.eql(destinationAccountEndEther);
 
         // Check wallet balance
-        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
 
         // Increment sequence id
@@ -414,39 +414,39 @@ contract('WalletSimple', function(accounts) {
       }
     }));
 
-    it("Stress test: 20 rounds of confirming in a single tx from an incorrect sender - should fail", co(function *() {
-      var sequenceIdString = yield wallet.getNextSequenceId.call();
+    it('Stress test: 20 rounds of confirming in a single tx from an incorrect sender - should fail', co(function *() {
+      const sequenceIdString = yield wallet.getNextSequenceId.call();
       sequenceId = parseInt(sequenceIdString);
 
-      for (var round=0; round < 20; round++) {
-        var destinationAccount = accounts[2];
-        var amount = _.random(1,9);
-        var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
-        var data = crypto.randomBytes(20).toString('hex');
+      for (let round=0; round < 20; round++) {
+        const destinationAccount = accounts[2];
+        const amount = _.random(1,9);
+        const expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+        const data = crypto.randomBytes(20).toString('hex');
 
-        var operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-        var sig = web3.eth.sign(accounts[5+round%5], operationHash);
+        const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
+        const sig = web3.eth.sign(accounts[5+round%5], operationHash);
         if (sig.length !== 132) {
           // TestRPC is signing incorrectly (returning unpadded sigs)
           continue;
         }
 
-        console.log("ExpectFail " + round + ": " + amount + "ETH, seqId: " + sequenceId + ", operationHash: " + operationHash + ", sig: " + sig);
-        var destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
-        var msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        console.log('ExpectFail ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId + ', operationHash: ' + operationHash + ', sig: ' + sig);
+        const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+        const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         try {
-          yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, "ether"), data, expireTime, sequenceId, sig, { from: accounts[1] });
-          throw new Error("should not be here");
+          yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[1] });
+          throw new Error('should not be here');
         } catch(err) {
-          err.message.toString().should.startWith("Error: VM Exception");
+          err.message.toString().should.startWith('Error: VM Exception');
         }
 
         // Check other account balance
-        var destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
+        const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         destinationAccountStartEther.plus(0).should.eql(destinationAccountEndEther);
 
         // Check wallet balance
-        var msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
+        const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
 
         // Increment sequence id
@@ -454,14 +454,14 @@ contract('WalletSimple', function(accounts) {
       }
     }));
 
-    it("Msg sender changing the amount should fail", co(function *() {
-      var params = {
+    it('Msg sender changing the amount should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[8],
         amount: 15,
-        data: "",
+        data: '',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -474,14 +474,14 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Msg sender changing the destination account should fail", co(function *() {
-      var params = {
+    it('Msg sender changing the destination account should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[1],
         otherSignerAddress: accounts[0],
         wallet: wallet,
         toAddress: accounts[5],
         amount: 25,
-        data: "001122ee",
+        data: '001122ee',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -494,34 +494,34 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Msg sender changing the data should fail", co(function *() {
-      var params = {
+    it('Msg sender changing the data should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[1],
         otherSignerAddress: accounts[2],
         wallet: wallet,
         toAddress: accounts[0],
         amount: 30,
-        data: "abcdef",
+        data: 'abcdef',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
 
       // override with different amount
       params.msgSenderArgs = {
-        data: "12bcde"
+        data: '12bcde'
       };
 
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Msg sender changing the expire time should fail", co(function *() {
-      var params = {
+    it('Msg sender changing the expire time should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[2],
         amount: 50,
-        data: "abcdef",
+        data: 'abcdef',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -534,14 +534,14 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Same owner signing twice should fail", co(function *() {
-      var params = {
+    it('Same owner signing twice should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[2],
         otherSignerAddress: accounts[2],
         wallet: wallet,
         toAddress: accounts[9],
         amount: 51,
-        data: "abcdef",
+        data: 'abcdef',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -549,14 +549,14 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Sending from an unauthorized signer (but valid other signature) should fail", co(function *() {
-      var params = {
+    it('Sending from an unauthorized signer (but valid other signature) should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[7],
         otherSignerAddress: accounts[2],
         wallet: wallet,
         toAddress: accounts[1],
         amount: 52,
-        data: "",
+        data: '',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -564,14 +564,14 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Sending from an authorized signer (but unauthorized other signer) should fail", co(function *() {
-      var params = {
+    it('Sending from an authorized signer (but unauthorized other signer) should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[6],
         wallet: wallet,
         toAddress: accounts[6],
         amount: 53,
-        data: "ab1234",
+        data: 'ab1234',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -579,15 +579,15 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    var usedSequenceId;
-    it("Sending with expireTime very far out should work", co(function *() {
-      var params = {
+    let usedSequenceId;
+    it('Sending with expireTime very far out should work', co(function *() {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[5],
         amount: 60,
-        data: "",
+        data: '',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -596,14 +596,14 @@ contract('WalletSimple', function(accounts) {
       usedSequenceId = sequenceId;
     }));
 
-    it("Sending with expireTime in the past should fail", co(function *() {
-      var params = {
+    it('Sending with expireTime in the past should fail', co(function *() {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[2],
         wallet: wallet,
         toAddress: accounts[2],
         amount: 55,
-        data: "aa",
+        data: 'aa',
         expireTime: Math.floor((new Date().getTime()) / 1000) - 100,
         sequenceId: sequenceId
       };
@@ -611,15 +611,15 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Can send with a sequence ID that is not sequential but higher than previous", co(function *() {
+    it('Can send with a sequence ID that is not sequential but higher than previous', co(function *() {
       sequenceId = 1000;
-      var params = {
+      const params = {
         msgSenderAddress: accounts[1],
         otherSignerAddress: accounts[2],
         wallet: wallet,
         toAddress: accounts[5],
         amount: 60,
-        data: "abcde35f123",
+        data: 'abcde35f123',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -627,15 +627,15 @@ contract('WalletSimple', function(accounts) {
       yield expectSuccessfulSendMultiSig(params);
     }));
 
-    it("Can send with a sequence ID that is unused but lower than the previous (not strictly monotonic increase)", co(function *() {
+    it('Can send with a sequence ID that is unused but lower than the previous (not strictly monotonic increase)', co(function *() {
       sequenceId = 200;
-      var params = {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[5],
         amount: 61,
-        data: "100135f123",
+        data: '100135f123',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -643,15 +643,15 @@ contract('WalletSimple', function(accounts) {
       yield expectSuccessfulSendMultiSig(params);
     }));
 
-    it("Send with a sequence ID that has been previously used should fail", co(function *() {
+    it('Send with a sequence ID that has been previously used should fail', co(function *() {
       sequenceId = usedSequenceId || (sequenceId - 1);
-      var params = {
+      const params = {
         msgSenderAddress: accounts[2],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[5],
         amount: 62,
-        data: "",
+        data: '',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -659,15 +659,15 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Send with a sequence ID that is used many transactions ago (lower than previous 10) should fail", co(function *() {
+    it('Send with a sequence ID that is used many transactions ago (lower than previous 10) should fail', co(function *() {
       sequenceId = 1;
-      var params = {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[5],
         amount: 63,
-        data: "5566abfe",
+        data: '5566abfe',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: sequenceId
       };
@@ -676,52 +676,52 @@ contract('WalletSimple', function(accounts) {
     }));
   });
 
-  describe("Safe mode", function() {
+  describe('Safe mode', function() {
     before(co(function *() {
       // Create and fund the wallet
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(50000, "ether") });
+      web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(50000, 'ether') });
     }));
 
-    it("Cannot be activated by unauthorized user", co(function *() {
+    it('Cannot be activated by unauthorized user', co(function *() {
       try {
         yield wallet.activateSafeMode({ from: accounts[5] });
-        throw new Error("should not be here");
+        throw new Error('should not be here');
       } catch(err) {
-        err.message.toString().should.startWith("Error: VM Exception");
+        err.message.toString().should.startWith('Error: VM Exception');
       }
-      var isSafeMode = yield wallet.safeMode.call();
+      const isSafeMode = yield wallet.safeMode.call();
       isSafeMode.should.eql(false);
     }));
 
-    it("Can be activated by any authorized signer", co(function *() {
-      for (var i=0; i<3; i++) {
-        var wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-        yield wallet.activateSafeMode({from: accounts[i]});
-        var isSafeMode = yield wallet.safeMode.call();
+    it('Can be activated by any authorized signer', co(function *() {
+      for (let i=0; i<3; i++) {
+        const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+        yield wallet.activateSafeMode({ from: accounts[i] });
+        const isSafeMode = yield wallet.safeMode.call();
         isSafeMode.should.eql(true);
       }
     }));
 
-    it("Cannot send transactions to external addresses in safe mode", co(function *() {
-      var isSafeMode = yield wallet.safeMode.call();
+    it('Cannot send transactions to external addresses in safe mode', co(function *() {
+      let isSafeMode = yield wallet.safeMode.call();
       isSafeMode.should.eql(false);
       yield wallet.activateSafeMode({ from: accounts[1] });
-      var isSafeMode = yield wallet.safeMode.call();
+      isSafeMode = yield wallet.safeMode.call();
       isSafeMode.should.eql(true);
       yield helpers.waitForEvents(walletEvents, 1);
-      var safeModeEvent = _.find(walletEvents, function(event) {
+      const safeModeEvent = _.find(walletEvents, function(event) {
         return event.event === 'SafeModeActivated';
       });
       safeModeEvent.args.msgSender.should.eql(accounts[1]);
 
-      var params = {
+      const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[8],
         amount: 22,
-        data: "100135f123",
+        data: '100135f123',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: 10001
       };
@@ -729,14 +729,14 @@ contract('WalletSimple', function(accounts) {
       yield expectFailSendMultiSig(params);
     }));
 
-    it("Can send transactions to signer addresses in safe mode", co(function *() {
-      var params = {
+    it('Can send transactions to signer addresses in safe mode', co(function *() {
+      const params = {
         msgSenderAddress: accounts[2],
         otherSignerAddress: accounts[1],
         wallet: wallet,
         toAddress: accounts[0],
         amount: 28,
-        data: "100135f123",
+        data: '100135f123',
         expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
         sequenceId: 9000
       };
@@ -745,118 +745,118 @@ contract('WalletSimple', function(accounts) {
     }));
   });
 
-  describe("Forwarder addresses", function() {
-    var forwardAbi = [{"constant":false,"inputs":[],"name":"flush","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"destinationAddress","outputs":[{"name":"","type":"address"}],"type":"function"},{"inputs":[],"type":"constructor"}];
-    var forwardContract = web3.eth.contract(forwardAbi);
+  describe('Forwarder addresses', function() {
+    const forwardAbi = [{ constant: false,inputs: [],name: 'flush',outputs: [],type: 'function' },{ constant: true,inputs: [],name: 'destinationAddress',outputs: [{ name: '',type: 'address' }],type: 'function' },{ inputs: [],type: 'constructor' }];
+    const forwardContract = web3.eth.contract(forwardAbi);
 
-    it("Create and forward", co(function *() {
-      var wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      var forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
-      var deployTxHash = yield wallet.createForwarder({ from: accounts[0] });
+    it('Create and forward', co(function *() {
+      const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      yield wallet.createForwarder({ from: accounts[0] });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
 
-      web3.eth.sendTransaction({from: accounts[1], to: forwarderContractAddress, value: web3.toWei(200, "ether")});
+      web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(200, 'ether') });
 
       // Verify funds forwarded
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200));
     }));
 
-    it("Multiple forward contracts", co(function *() {
-      var numForwardAddresses = 10;
-      var etherEachSend = 4;
-      var wallet = yield WalletSimple.new([accounts[2], accounts[3], accounts[4]]);
+    it('Multiple forward contracts', co(function *() {
+      const numForwardAddresses = 10;
+      const etherEachSend = 4;
+      const wallet = yield WalletSimple.new([accounts[2], accounts[3], accounts[4]]);
 
       // Create forwarders and send 4 ether to each of the addresses
-      for (var i=0; i < numForwardAddresses; i++) {
-        yield wallet.createForwarder({from: accounts[2]});
+      for (let i=0; i < numForwardAddresses; i++) {
+        yield wallet.createForwarder({ from: accounts[2] });
 
         // Derive out the forwarder address and send funds to it
-        var forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, i));
-        web3.eth.sendTransaction({from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, "ether")});
+        const forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, i));
+        web3.eth.sendTransaction({ from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, 'ether') });
       }
 
       // Verify all the forwarding is complete
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(etherEachSend * numForwardAddresses));
     }));
 
-    it("Send before create, then flush", co(function *() {
-      var wallet = yield WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
-      var forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
-      web3.eth.sendTransaction({from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, "ether")});
+    it('Send before create, then flush', co(function *() {
+      const wallet = yield WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      var deployTxHash = yield wallet.createForwarder({ from: accounts[3] });
+      yield wallet.createForwarder({ from: accounts[3] });
 
       // Verify that funds are still stuck in forwarder contract address
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
       // Flush and verify
-      var flushTxHash = forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
+      forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
     }));
 
-    it("Flush sent from external account", co(function *() {
-      var wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
-      var forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
-      web3.eth.sendTransaction({from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, "ether")});
+    it('Flush sent from external account', co(function *() {
+      const wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      var deployTxHash = yield wallet.createForwarder({ from: accounts[5] });
+      yield wallet.createForwarder({ from: accounts[5] });
 
       // Verify that funds are still stuck in forwarder contract address
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
       // Flush and verify
-      var flushTxHash = forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
+      forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
     }));
   });
 
-  describe("ERC20 token transfers", function() {
-    var fixedSupplyTokenContract;
+  describe('ERC20 token transfers', function() {
+    let fixedSupplyTokenContract;
     before(co(function *() {
       // Create and fund the wallet
       wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
-      fixedSupplyTokenContract = yield FixedSupplyToken.new(undefined, {from: accounts[0]})
-      var balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      fixedSupplyTokenContract = yield FixedSupplyToken.new(undefined, { from: accounts[0] });
+      const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000));
     }));
 
-    it("Receive and Send tokens from main wallet contract", co(function *() {
+    it('Receive and Send tokens from main wallet contract', co(function *() {
       
-      var sendMultiSigTxHash = yield fixedSupplyTokenContract.transfer(wallet.address, 100, { from: accounts[0] });
-      var balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      yield fixedSupplyTokenContract.transfer(wallet.address, 100, { from: accounts[0] });
+      const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100));
-      var msigWalletStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const msigWalletStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
       msigWalletStartTokens.should.eql(web3.toBigNumber(100));
       
-      var sequenceIdString = yield wallet.getNextSequenceId.call();
-      var sequenceId = parseInt(sequenceIdString);
+      const sequenceIdString = yield wallet.getNextSequenceId.call();
+      const sequenceId = parseInt(sequenceIdString);
 
-      var destinationAccount = accounts[5];
-      var amount = 50;
-      var expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
+      const destinationAccount = accounts[5];
+      const amount = 50;
+      const expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
 
-      var destinationAccountStartTokens = yield fixedSupplyTokenContract.balanceOf.call(accounts[5]);
+      const destinationAccountStartTokens = yield fixedSupplyTokenContract.balanceOf.call(accounts[5]);
       destinationAccountStartTokens.should.eql(web3.toBigNumber(0));
 
-      var operationHash = helpers.getSha3ForConfirmationTokenTx(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId);
-      var sig = web3.eth.sign(accounts[4], operationHash);
-      operationHash = "0x" + operationHash;
+      let operationHash = helpers.getSha3ForConfirmationTokenTx(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId);
+      const sig = web3.eth.sign(accounts[4], operationHash);
+      operationHash = '0x' + operationHash;
   
-      var sendMultiSigTxHash = yield wallet.sendMultiSigToken(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId, sig, { from: accounts[5] });
-      var destinationAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(destinationAccount);
+      yield wallet.sendMultiSigToken(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId, sig, { from: accounts[5] });
+      const destinationAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(destinationAccount);
       destinationAccountStartTokens.plus(amount).should.eql(destinationAccountEndTokens);
 
       // Check wallet balance
-      var msigWalletEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const msigWalletEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
       msigWalletStartTokens.minus(amount).should.eql(msigWalletEndTokens);
       /* TODO Barath - Get event testing to work
       yield helpers.waitForEvents(walletEvents, 3); // wait for events to come in
@@ -874,23 +874,23 @@ contract('WalletSimple', function(accounts) {
       */
     }));
 
-    it("Flush from Forwarder contract", co(function *() {
-      var forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
-      var deployTxHash = yield wallet.createForwarder({ from: accounts[4] });
+    it('Flush from Forwarder contract', co(function *() {
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      wallet.createForwarder({ from: accounts[4] });
       yield fixedSupplyTokenContract.transfer(forwarderContractAddress, 100, { from: accounts[0] });
-      var balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100 - 100));
       
-      var forwarderContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
+      const forwarderContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
       forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
-      var walletContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const walletContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
 
-      var sendMultiSigTxHash = yield wallet.flushForwarderTokens(forwarderContractAddress, fixedSupplyTokenContract.address, { from: accounts[5] });
-      var forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
+      yield wallet.flushForwarderTokens(forwarderContractAddress, fixedSupplyTokenContract.address, { from: accounts[5] });
+      const forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
       forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
 
       // Check wallet balance
-      var walletContractEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const walletContractEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
       walletContractStartTokens.plus(100).should.eql(walletContractEndTokens);
       /* TODO Barath - Get event testing for forwarder contract token send to work
       */
