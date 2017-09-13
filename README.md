@@ -6,13 +6,13 @@ Multi-sig contract suitable for use in wallets.
 
 Some of the features of the contract (WalletSimple.sol)
 
-1. Should work as 2-of-3 multisig
+1. Functions as a 2-of-3 multisig wallet for sending transactions.
 2. Support for synchronous (single transaction) approvals containing multiple signatures through the use of ecrecover.
 3. Can deploy Forwarder contracts so that a single wallet can have multiple receive addresses. 
-4. Forwarder address contracts have the ability to flush funds which were sent to the address before the contract was created.
-5. ERC20 tokens can be flushed from the forwarder wallet to the main wallet by an signer
+4. Forwarder address contracts have the ability to flush funds that were sent to the address before the contract was created.
+5. ERC20 tokens can be flushed from the forwarder wallet to the main wallet with a single signature from any signer.
 6. ERC20 tokens and ether can be sent out from the main wallet through a multisig process.
-7. ‘Safe Mode’ can be set on a wallet contract which will force ETH and ERC20 token sends only to the signers
+7. ‘Safe Mode’ can be set on a wallet contract that prevents ETH and ERC20 tokens from being sent anywhere other than to wallet signers
 
 
 A test suite is included through the use of the truffle framework, providing coverage for methods in the wallet.
