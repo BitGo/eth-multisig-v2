@@ -15,6 +15,10 @@ const crypto = require('crypto');
 const WalletSimple = artifacts.require('./WalletSimple.sol');
 const FixedSupplyToken = artifacts.require('./FixedSupplyToken.sol');
 
+const assertVMException = (err) => {
+  err.message.toString().should.startWith('VM Exception');
+};
+
 contract('WalletSimple', function(accounts) {
   let wallet;
   let walletEvents;
@@ -170,7 +174,7 @@ contract('WalletSimple', function(accounts) {
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
         throw new Error("should not have inserted successfully");
       } catch(err) {
-        err.message.toString().should.startWith("Error: VM Exception");
+        assertVMException(err);
       }
 
       // should be unchanged
@@ -212,7 +216,7 @@ contract('WalletSimple', function(accounts) {
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
         throw new Error("should not have inserted successfully");
       } catch(err) {
-        err.message.toString().should.startWith("Error: VM Exception");
+        assertVMException(err);
       }
     }));
 
@@ -221,7 +225,7 @@ contract('WalletSimple', function(accounts) {
         yield wallet.tryInsertSequenceId(1, { from: accounts[8] });
         throw new Error("should not have inserted successfully");
       } catch(err) {
-        err.message.toString().should.startWith("Error: VM Exception");
+        assertVMException(err);
       }
     }));
   });
@@ -289,7 +293,7 @@ contract('WalletSimple', function(accounts) {
       yield sendMultiSigTestHelper(params);
       throw new Error('should not have sent successfully');
     } catch(err) {
-      err.message.toString().should.startWith('Error: VM Exception');
+      assertVMException(err);
     }
 
     // Check the balances after the transaction
@@ -410,7 +414,7 @@ contract('WalletSimple', function(accounts) {
           );
           throw new Error('should not be here');
         } catch(err) {
-          err.message.toString().should.startWith('Error: VM Exception');
+          assertVMException(err);
         }
 
         // Check other account balance
@@ -451,7 +455,7 @@ contract('WalletSimple', function(accounts) {
           );
           throw new Error('should not be here');
         } catch(err) {
-          err.message.toString().should.startWith('Error: VM Exception');
+          assertVMException(err);
         }
 
         // Check other account balance
@@ -701,7 +705,7 @@ contract('WalletSimple', function(accounts) {
         yield wallet.activateSafeMode({ from: accounts[5] });
         throw new Error('should not be here');
       } catch(err) {
-        err.message.toString().should.startWith('Error: VM Exception');
+        assertVMException(err);
       }
       const isSafeMode = yield wallet.safeMode.call();
       isSafeMode.should.eql(false);
