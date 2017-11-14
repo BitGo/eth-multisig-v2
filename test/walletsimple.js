@@ -116,6 +116,7 @@ contract('WalletSimple', function(accounts) {
   /*
   Commented out because tryInsertSequenceId and recoverAddressFromSignature is private. Uncomment the private and tests to test this.
   Functionality is also tested in the sendMultiSig tests.
+  */
 
   describe("Recover address from signature", function() {
     before(co(function *() {
@@ -123,18 +124,18 @@ contract('WalletSimple', function(accounts) {
     }));
 
     it("Check for matching implementation with web3.eth.sign (50 iterations)", co(function *() {
-      for (var i=0; i<50; i++) {
+      for (let i=0; i<50; i++) {
         // Get a random operation hash to sign
-        var signerAddress = accounts[Math.floor(Math.random() * 10)];
-        var sequenceId = Math.floor(Math.random() * 1000);
-        var operationHash = helpers.getSha3ForConfirmationTx(accounts[9], 10, "", Math.floor((new Date().getTime()) / 1000), sequenceId);
-        var signature = web3.eth.sign(signerAddress, operationHash);
+        const signerAddress = accounts[Math.floor(Math.random() * 10)];
+        const sequenceId = Math.floor(Math.random() * 1000);
+        const operationHash = helpers.getSha3ForConfirmationTx(accounts[9], 10, "", Math.floor((new Date().getTime()) / 1000), sequenceId);
+        const signature = web3.eth.sign(signerAddress, operationHash);
         if (signature.length !== 132) {
           // TestRPC is signing incorrectly (returning unpadded sigs)
           continue;
         }
         console.log((i+1) + ": Operation hash: " + operationHash + ", Signer: " + signerAddress + ", Sig: " + signature);
-        var recoveredAddress = yield wallet.recoverAddressFromSignature.call(util.addHexPrefix(operationHash), signature);
+        const recoveredAddress = yield wallet.recoverAddressFromSignature.call(util.addHexPrefix(operationHash), signature);
         recoveredAddress.should.eql(signerAddress);
       }
     }));
@@ -145,13 +146,13 @@ contract('WalletSimple', function(accounts) {
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
     }));
 
-    var getSequenceId = co(function *() {
-      var sequenceIdString = yield wallet.getNextSequenceId.call();
+    const getSequenceId = co(function *() {
+      const sequenceIdString = yield wallet.getNextSequenceId.call();
       return parseInt(sequenceIdString);
     });
 
     it("Authorized signer can request and insert an id", co(function *() {
-      var sequenceId = yield getSequenceId();
+      let sequenceId = yield getSequenceId();
       sequenceId.should.eql(1);
       yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
       sequenceId = yield getSequenceId();
@@ -159,7 +160,7 @@ contract('WalletSimple', function(accounts) {
     }));
 
     it("Non-signer cannot insert an id", co(function *() {
-      var sequenceId = yield getSequenceId();
+      const sequenceId = yield getSequenceId();
 
       try {
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
@@ -169,37 +170,39 @@ contract('WalletSimple', function(accounts) {
       }
 
       // should be unchanged
-      var newSequenceId = yield getSequenceId();
+      const newSequenceId = yield getSequenceId();
       sequenceId.should.eql(newSequenceId);
     }));
 
-    it("Can request large sequence ids", co(function *() {
-      for (var i=0; i<30; i++) {
-        var sequenceId = yield getSequenceId();
+    // FIXME BG-2417
+    xit("Can request large sequence ids", co(function *() {
+      for (let i=0; i<30; i++) {
+        let sequenceId = yield getSequenceId();
         // Increase by 1000 each time to test for big numbers (there will be holes, this is ok)
         sequenceId += 1000;
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
-        var newSequenceId = yield getSequenceId();
+        const newSequenceId = yield getSequenceId();
         newSequenceId.should.eql(sequenceId + 1);
       }
     }));
 
-    it("Can request lower but unused recent sequence id within the window", co(function *() {
-      var windowSize = 10;
-      var sequenceId = yield getSequenceId();
-      var originalNextSequenceId = sequenceId;
+    // FIXME BG-2417
+    xit("Can request lower but unused recent sequence id within the window", co(function *() {
+      const windowSize = 10;
+      let sequenceId = yield getSequenceId();
+      let originalNextSequenceId = sequenceId;
       // Try for 9 times (windowsize - 1) because the last window was used already
-      for (var i=0; i < (windowSize - 1); i++) {
+      for (let i=0; i < (windowSize - 1); i++) {
         sequenceId -= 50; // since we were incrementing 1000 per time, this should be unused
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
       }
-      var newSequenceId = yield getSequenceId();
+      let newSequenceId = yield getSequenceId();
       // we should still get the same next sequence id since we were using old ids
       newSequenceId.should.eql(originalNextSequenceId);
     }));
 
     it("Cannot request lower but used recent sequence id within the window", co(function *() {
-      var sequenceId = yield getSequenceId();
+      let sequenceId = yield getSequenceId();
       sequenceId -= 50; // we used this in the previous test
       try {
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
@@ -218,7 +221,6 @@ contract('WalletSimple', function(accounts) {
       }
     }));
   });
-  */
 
   // Helper to get the operation hash, sign it, and then send it using sendMultiSig
   const sendMultiSigTestHelper = co(function *(params) {
