@@ -7,8 +7,9 @@ const co = Promise.coroutine;
 const _ = require('lodash');
 
 const helpers = require('./helpers');
+const { privateKeyForAccount } = require('../testrpc/accounts');
 
-// Used to build the solidity tightly packed buffer to sha3
+// Used to build the solidity tightly packed buffer to sha3, ecsign
 const util = require('ethereumjs-util');
 const crypto = require('crypto');
 const WalletSimple = artifacts.require('./WalletSimple.sol');
@@ -123,19 +124,22 @@ contract('WalletSimple', function(accounts) {
       wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
     }));
 
-    it("Check for matching implementation with web3.eth.sign (50 iterations)", co(function *() {
+    it("Check for matching implementation with util.ecsign (50 iterations)", co(function *() {
       for (let i=0; i<50; i++) {
         // Get a random operation hash to sign
         const signerAddress = accounts[Math.floor(Math.random() * 10)];
         const sequenceId = Math.floor(Math.random() * 1000);
-        const operationHash = helpers.getSha3ForConfirmationTx(accounts[9], 10, "", Math.floor((new Date().getTime()) / 1000), sequenceId);
-        const signature = web3.eth.sign(signerAddress, operationHash);
-        if (signature.length !== 132) {
-          // TestRPC is signing incorrectly (returning unpadded sigs)
-          continue;
-        }
-        console.log((i+1) + ": Operation hash: " + operationHash + ", Signer: " + signerAddress + ", Sig: " + signature);
-        const recoveredAddress = yield wallet.recoverAddressFromSignature.call(util.addHexPrefix(operationHash), signature);
+        const operationHash = helpers.getSha3ForConfirmationTx(
+          accounts[9], 10, "", Math.floor((new Date().getTime()) / 1000), sequenceId
+        );
+        const sig = util.ecsign(operationHash, privateKeyForAccount(signerAddress));
+        console.log(
+          (i+1) + ": Operation hash: " + operationHash.toString('hex') +
+          ", Signer: " + signerAddress + ", Sig: " + helpers.serializeSignature(sig)
+        );
+        const recoveredAddress = yield wallet.recoverAddressFromSignature.call(
+          util.addHexPrefix(operationHash.toString('hex')), helpers.serializeSignature(sig)
+        );
         recoveredAddress.should.eql(signerAddress);
       }
     }));
@@ -247,7 +251,7 @@ contract('WalletSimple', function(accounts) {
       otherSignerArgs.expireTime,
       otherSignerArgs.sequenceId
     );
-    const signature = web3.eth.sign(params.otherSignerAddress, operationHash);
+    const sig = util.ecsign(operationHash, privateKeyForAccount(params.otherSignerAddress));
 
     yield params.wallet.sendMultiSig(
       msgSenderArgs.toAddress,
@@ -255,7 +259,7 @@ contract('WalletSimple', function(accounts) {
       msgSenderArgs.data,
       msgSenderArgs.expireTime,
       msgSenderArgs.sequenceId,
-      signature,
+      helpers.serializeSignature(sig),
       { from: params.msgSenderAddress }
     );
   });
@@ -320,10 +324,12 @@ contract('WalletSimple', function(accounts) {
       const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
 
       let operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-      const sig = web3.eth.sign(accounts[1], operationHash);
-      operationHash = '0x' + operationHash;
+      const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[1]));
 
-      yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[0] });
+      yield wallet.sendMultiSig(
+        destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
+        { from: accounts[0] }
+      );
       const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
       destinationAccountStartEther.plus(amount).should.eql(destinationAccountEndEther);
 
@@ -339,7 +345,7 @@ contract('WalletSimple', function(accounts) {
       });
       transactedEvent.args.msgSender.should.eql(accounts[0]);
       transactedEvent.args.otherSigner.should.eql(accounts[1]);
-      transactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash));
+      transactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash.toString('hex')));
       transactedEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(amount, 'ether')));
       transactedEvent.args.toAddress.should.eql(destinationAccount);
       transactedEvent.args.data.should.eql(util.addHexPrefix(new Buffer(data).toString('hex')));
@@ -353,17 +359,19 @@ contract('WalletSimple', function(accounts) {
         const data = crypto.randomBytes(20).toString('hex');
 
         const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-        const sig = web3.eth.sign(accounts[0], operationHash);
-        if (sig.length !== 132) {
-          // TestRPC is signing incorrectly (returning unpadded sigs)
-          continue;
-        }
+        const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[0]));
 
-        console.log('ExpectSuccess ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId + ', operationHash: ' + operationHash + ', sig: ' + sig);
+        console.log(
+          'ExpectSuccess ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId +
+          ', operationHash: ' + operationHash.toString('hex') + ', sig: ' + helpers.serializeSignature(sig)
+        );
 
         const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-        yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[1] });
+        yield wallet.sendMultiSig(
+          destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
+          { from: accounts[1] }
+        );
 
         // Check other account balance
         const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
@@ -387,17 +395,19 @@ contract('WalletSimple', function(accounts) {
         const data = crypto.randomBytes(20).toString('hex');
 
         const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-        const sig = web3.eth.sign(accounts[0], operationHash);
-        if (sig.length !== 132) {
-          // TestRPC is signing incorrectly (returning unpadded sigs)
-          continue;
-        }
+        const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[0]));
 
-        console.log('ExpectFail ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId + ', operationHash: ' + operationHash + ', sig: ' + sig);
+        console.log(
+          'ExpectFail ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId +
+          ', operationHash: ' + operationHash.toString('hex') + ', sig: ' + helpers.serializeSignature(sig)
+        );
         const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         try {
-          yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[1] });
+          yield wallet.sendMultiSig(
+            destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
+            { from: accounts[1] }
+          );
           throw new Error('should not be here');
         } catch(err) {
           err.message.toString().should.startWith('Error: VM Exception');
@@ -427,17 +437,18 @@ contract('WalletSimple', function(accounts) {
         const data = crypto.randomBytes(20).toString('hex');
 
         const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
-        const sig = web3.eth.sign(accounts[5+round%5], operationHash);
-        if (sig.length !== 132) {
-          // TestRPC is signing incorrectly (returning unpadded sigs)
-          continue;
-        }
+        const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[5+round%5]));
 
-        console.log('ExpectFail ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId + ', operationHash: ' + operationHash + ', sig: ' + sig);
+        console.log(
+          'ExpectFail ' + round + ': ' + amount + 'ETH, seqId: ' + sequenceId +
+          ', operationHash: ' + operationHash.toString('hex') + ', sig: ' + helpers.serializeSignature(sig));
         const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         try {
-          yield wallet.sendMultiSig(destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, sig, { from: accounts[1] });
+          yield wallet.sendMultiSig(
+            destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
+            { from: accounts[1] }
+          );
           throw new Error('should not be here');
         } catch(err) {
           err.message.toString().should.startWith('Error: VM Exception');
@@ -849,11 +860,15 @@ contract('WalletSimple', function(accounts) {
       const destinationAccountStartTokens = yield fixedSupplyTokenContract.balanceOf.call(accounts[5]);
       destinationAccountStartTokens.should.eql(web3.toBigNumber(0));
 
-      let operationHash = helpers.getSha3ForConfirmationTokenTx(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId);
-      const sig = web3.eth.sign(accounts[4], operationHash);
-      operationHash = '0x' + operationHash;
-  
-      yield wallet.sendMultiSigToken(destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId, sig, { from: accounts[5] });
+      const operationHash = helpers.getSha3ForConfirmationTokenTx(
+        destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId
+      );
+      const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[4]));
+
+      yield wallet.sendMultiSigToken(
+        destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId, helpers.serializeSignature(sig),
+        { from: accounts[5] }
+      );
       const destinationAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(destinationAccount);
       destinationAccountStartTokens.plus(amount).should.eql(destinationAccountEndTokens);
 
@@ -869,7 +884,7 @@ contract('WalletSimple', function(accounts) {
       });
       tokenTransactedEvent.args.msgSender.should.eql(accounts[4]);
       tokenTransactedEvent.args.otherSigner.should.eql(accounts[5]);
-      tokenTransactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash));
+      tokenTransactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash.toString('hex'));
       tokenTransactedEvent.args.value.should.eql(web3.toBigNumber(amount));
       tokenTransactedEvent.args.toAddress.should.eql(destinationAccount);
       tokenTransactedEvent.args.tokenContractAddress.should.eql(fixedSupplyTokenContract.address);

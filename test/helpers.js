@@ -1,6 +1,7 @@
 const abi = require('ethereumjs-abi');
 const BN = require('bn.js');
 const Promise = require('bluebird');
+
 exports.showBalances = function() {
   const accounts = web3.eth.accounts;
   for (let i=0; i<accounts.length; i++) {
@@ -38,7 +39,7 @@ exports.getSha3ForConfirmationTx = function(toAddress, amount, data, expireTime,
   return abi.soliditySHA3(
     ['string', 'address', 'uint', 'string', 'uint', 'uint'],
     ['ETHER', new BN(toAddress.replace('0x', ''), 16), web3.toWei(amount, 'ether'), data, expireTime, sequenceId]
-  ).toString('hex');
+  );
 };
 
 // Helper to get token transactions sha3 for solidity tightly-packed arguments
@@ -46,5 +47,9 @@ exports.getSha3ForConfirmationTokenTx = function(toAddress, value, tokenContract
   return abi.soliditySHA3(
     ['string', 'address', 'uint', 'address', 'uint', 'uint'],
     ['ERC20', new BN(toAddress.replace('0x', ''), 16), value, new BN(tokenContractAddress.replace('0x', ''), 16), expireTime, sequenceId]
-  ).toString('hex');
+  );
 };
+
+// Serialize signature into format understood by our recoverAddress function
+exports.serializeSignature = ({r, s, v}) =>
+  '0x' + Buffer.concat([r, s, Buffer.from([v])]).toString('hex');

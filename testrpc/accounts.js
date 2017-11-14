@@ -1,4 +1,4 @@
-const ethUtil = require("ethereumjs-util");
+const util = require("ethereumjs-util");
 
 exports.accounts = [
   '0xc8209c2200f920b11a460733c91687565c712b40c6f0350e9ad4138bf3193e47',
@@ -13,8 +13,20 @@ exports.accounts = [
   '0xace7201611ba195f85fb2e25b53e0f9869e57e2267d1c5eef63144c75dee5142'
 ].map((privkeyHex) => {
   const privkey = Buffer.from(privkeyHex.replace(/^0x/i, ''), 'hex');
-  const pubkey = ethUtil.privateToPublic(privkey);
-  const address = ethUtil.pubToAddress(pubkey);
+  const pubkey = util.privateToPublic(privkey);
+  const address = util.pubToAddress(pubkey);
   return { privkey, pubkey, address };
 });
 
+
+const mapAddrToAcct = exports.accounts.reduce(
+  (obj, { address, privkey }) => Object.assign(obj, { [address.toString('hex')]: privkey }), {}
+);
+
+exports.privateKeyForAccount = (acct) => {
+  const result = mapAddrToAcct[util.stripHexPrefix(acct).toLowerCase()];
+  if (!result) {
+    throw new Error('no privkey for ' + acct);
+  }
+  return result;
+};
