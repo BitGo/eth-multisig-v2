@@ -150,7 +150,7 @@ contract WalletSimple {
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
    * returns address of the address to send tokens or eth to
    */
-  function verifyMultiSig(address toAddress, bytes32 operationHash, bytes signature, uint expireTime, uint sequenceId) returns (address) {
+  function verifyMultiSig(address toAddress, bytes32 operationHash, bytes signature, uint expireTime, uint sequenceId) private returns (address) {
 
     var otherSigner = recoverAddressFromSignature(operationHash, signature);
 
@@ -209,7 +209,7 @@ contract WalletSimple {
    * @param signature the tightly packed signature of r, s, and v as an array of 65 bytes (returned by eth.sign)
    * returns address recovered from the signature
    */
-  function recoverAddressFromSignature(bytes32 operationHash, bytes signature) returns (address) {
+  function recoverAddressFromSignature(bytes32 operationHash, bytes signature) private returns (address) {
     if (signature.length != 65) {
       throw;
     }
@@ -234,7 +234,7 @@ contract WalletSimple {
    * greater than the minimum element in the window.
    * @param sequenceId to insert into array of stored ids
    */
-  function tryInsertSequenceId(uint sequenceId) onlysigner {
+  function tryInsertSequenceId(uint sequenceId) onlysigner private {
     // Keep a pointer to the lowest value element in the window
     uint lowestValueIndex = 0;
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
