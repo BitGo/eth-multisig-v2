@@ -121,7 +121,6 @@ contract('WalletSimple', function(accounts) {
   /*
   Commented out because tryInsertSequenceId and recoverAddressFromSignature is private. Uncomment the private and tests to test this.
   Functionality is also tested in the sendMultiSig tests.
-  */
 
   describe("Recover address from signature", function() {
     before(co(function *() {
@@ -185,7 +184,7 @@ contract('WalletSimple', function(accounts) {
     it("Can request large sequence ids", co(function *() {
       for (let i=0; i<30; i++) {
         let sequenceId = yield getSequenceId();
-        // Increase by 1000 each time to test for big numbers (there will be holes, this is ok)
+        // Increase by 100 each time to test for big numbers (there will be holes, this is ok)
         sequenceId += 100;
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
         const newSequenceId = yield getSequenceId();
@@ -227,6 +226,7 @@ contract('WalletSimple', function(accounts) {
       }
     }));
   });
+  */
 
   // Helper to get the operation hash, sign it, and then send it using sendMultiSig
   const sendMultiSigTestHelper = co(function *(params) {
