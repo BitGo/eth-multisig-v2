@@ -768,7 +768,7 @@ contract('WalletSimple', function(accounts) {
 
     it('Create and forward', co(function *() {
       const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
       yield wallet.createForwarder({ from: accounts[0] });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
 
@@ -789,7 +789,7 @@ contract('WalletSimple', function(accounts) {
         yield wallet.createForwarder({ from: accounts[2] });
 
         // Derive out the forwarder address and send funds to it
-        const forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, i));
+        const forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, i+1));
         web3.eth.sendTransaction({ from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, 'ether') });
       }
 
@@ -799,7 +799,7 @@ contract('WalletSimple', function(accounts) {
 
     it('Send before create, then flush', co(function *() {
       const wallet = yield WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
@@ -818,7 +818,7 @@ contract('WalletSimple', function(accounts) {
 
     it('Flush sent from external account', co(function *() {
       const wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
@@ -896,7 +896,7 @@ contract('WalletSimple', function(accounts) {
     }));
 
     it('Flush from Forwarder contract', co(function *() {
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 0));
+      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
       wallet.createForwarder({ from: accounts[4] });
       yield fixedSupplyTokenContract.transfer(forwarderContractAddress, 100, { from: accounts[0] });
       const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
