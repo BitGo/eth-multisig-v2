@@ -182,26 +182,24 @@ contract('WalletSimple', function(accounts) {
       sequenceId.should.eql(newSequenceId);
     }));
 
-    // FIXME BG-2417
-    xit("Can request large sequence ids", co(function *() {
+    it("Can request large sequence ids", co(function *() {
       for (let i=0; i<30; i++) {
         let sequenceId = yield getSequenceId();
         // Increase by 1000 each time to test for big numbers (there will be holes, this is ok)
-        sequenceId += 1000;
+        sequenceId += 100;
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
         const newSequenceId = yield getSequenceId();
         newSequenceId.should.eql(sequenceId + 1);
       }
     }));
 
-    // FIXME BG-2417
-    xit("Can request lower but unused recent sequence id within the window", co(function *() {
+    it("Can request lower but unused recent sequence id within the window", co(function *() {
       const windowSize = 10;
       let sequenceId = yield getSequenceId();
       let originalNextSequenceId = sequenceId;
       // Try for 9 times (windowsize - 1) because the last window was used already
       for (let i=0; i < (windowSize - 1); i++) {
-        sequenceId -= 50; // since we were incrementing 1000 per time, this should be unused
+        sequenceId -= 5; // since we were incrementing 100 per time, this should be unused
         yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
       }
       let newSequenceId = yield getSequenceId();
