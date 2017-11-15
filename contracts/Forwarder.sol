@@ -1,4 +1,4 @@
-pragma solidity ^0.4.11;
+pragma solidity ^0.4.18;
 import "./ERC20Interface.sol";
 /**
  * Contract that will forward any incoming Ether to its creator
