@@ -1,7 +1,5 @@
-/* jshint undef: false, unused: true */
-
 require('assert');
-require('should');
+const should = require('should');
 const Promise = require('bluebird');
 const co = Promise.coroutine;
 const _ = require('lodash');
@@ -12,7 +10,9 @@ const { privateKeyForAccount } = require('../testrpc/accounts');
 // Used to build the solidity tightly packed buffer to sha3, ecsign
 const util = require('ethereumjs-util');
 const crypto = require('crypto');
+
 const WalletSimple = artifacts.require('./WalletSimple.sol');
+const Forwarder = artifacts.require('./Forwarder.sol');
 const FixedSupplyToken = artifacts.require('./FixedSupplyToken.sol');
 
 const assertVMException = (err) => {
@@ -325,7 +325,7 @@ contract('WalletSimple', function(accounts) {
       const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
       const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
 
-      let operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
+      const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
       const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[1]));
 
       yield wallet.sendMultiSig(
@@ -728,6 +728,7 @@ contract('WalletSimple', function(accounts) {
       const safeModeEvent = _.find(walletEvents, function(event) {
         return event.event === 'SafeModeActivated';
       });
+      should.exist(safeModeEvent);
       safeModeEvent.args.msgSender.should.eql(accounts[1]);
 
       const params = {
@@ -766,14 +767,13 @@ contract('WalletSimple', function(accounts) {
 
     it('Create and forward', co(function *() {
       const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
-      yield wallet.createForwarder({ from: accounts[0] });
-      web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+      const forwarder = yield Forwarder.new([wallet.address]);
+      web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(200, 'ether') });
+      web3.eth.sendTransaction({ from: accounts[1], to: forwarder.address, value: web3.toWei(200, 'ether') });
 
       // Verify funds forwarded
-      web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+      web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200));
     }));
 
@@ -784,11 +784,8 @@ contract('WalletSimple', function(accounts) {
 
       // Create forwarders and send 4 ether to each of the addresses
       for (let i=0; i < numForwardAddresses; i++) {
-        yield wallet.createForwarder({ from: accounts[2] });
-
-        // Derive out the forwarder address and send funds to it
-        const forwardAddress = util.bufferToHex(util.generateAddress(wallet.address, i+1));
-        web3.eth.sendTransaction({ from: accounts[1], to: forwardAddress, value: web3.toWei(etherEachSend, 'ether') });
+        const forwarder = yield Forwarder.new([wallet.address]);
+        web3.eth.sendTransaction({ from: accounts[1], to: forwarder.address, value: web3.toWei(etherEachSend, 'ether') });
       }
 
       // Verify all the forwarding is complete
@@ -797,12 +794,13 @@ contract('WalletSimple', function(accounts) {
 
     it('Send before create, then flush', co(function *() {
       const wallet = yield WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
+      const forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      yield wallet.createForwarder({ from: accounts[3] });
+      const forwarder = yield Forwarder.new([wallet.address], { from: accounts[0] });
+      forwarder.address.should.eql(forwarderContractAddress);
 
       // Verify that funds are still stuck in forwarder contract address
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
@@ -816,20 +814,21 @@ contract('WalletSimple', function(accounts) {
 
     it('Flush sent from external account', co(function *() {
       const wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
+      const forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      yield wallet.createForwarder({ from: accounts[5] });
+      const forwarder = yield Forwarder.new([wallet.address], { from: accounts[0] });
+      forwarder.address.should.eql(forwarderContractAddress);
 
       // Verify that funds are still stuck in forwarder contract address
-      web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
+      web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
       // Flush and verify
-      forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
-      web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
+      forwardContract.at(forwarder.address).flush({ from: accounts[0] });
+      web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
     }));
   });
@@ -894,18 +893,17 @@ contract('WalletSimple', function(accounts) {
     }));
 
     it('Flush from Forwarder contract', co(function *() {
-      const forwarderContractAddress = util.bufferToHex(util.generateAddress(wallet.address, 1));
-      wallet.createForwarder({ from: accounts[4] });
-      yield fixedSupplyTokenContract.transfer(forwarderContractAddress, 100, { from: accounts[0] });
+      const forwarder = yield Forwarder.new([wallet.address]);
+      yield fixedSupplyTokenContract.transfer(forwarder.address, 100, { from: accounts[0] });
       const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100 - 100));
-      
-      const forwarderContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
+
+      const forwarderContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarder.address);
       forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
       const walletContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
 
-      yield wallet.flushForwarderTokens(forwarderContractAddress, fixedSupplyTokenContract.address, { from: accounts[5] });
-      const forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarderContractAddress);
+      yield wallet.flushForwarderTokens(forwarder.address, fixedSupplyTokenContract.address, { from: accounts[5] });
+      const forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarder.address);
       forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
 
       // Check wallet balance

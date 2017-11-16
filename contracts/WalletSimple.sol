@@ -71,14 +71,6 @@ contract WalletSimple {
   }
 
   /**
-   * Create a new contract (and also address) that forwards funds to this contract
-   * returns address of newly created forwarder address
-   */
-  function createForwarder() onlysigner returns (address) {
-    return new Forwarder();
-  }
-
-  /**
    * Execute a multi-signature transaction from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
    * The signature is a signed form (using eth.sign) of tightly packed toAddress, value, data, expireTime and sequenceId
    * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.

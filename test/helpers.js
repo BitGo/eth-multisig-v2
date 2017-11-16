@@ -1,4 +1,5 @@
 const abi = require('ethereumjs-abi');
+const util = require('ethereumjs-util');
 const BN = require('bn.js');
 const Promise = require('bluebird');
 
@@ -53,3 +54,13 @@ exports.getSha3ForConfirmationTokenTx = function(toAddress, value, tokenContract
 // Serialize signature into format understood by our recoverAddress function
 exports.serializeSignature = ({r, s, v}) =>
   '0x' + Buffer.concat([r, s, Buffer.from([v])]).toString('hex');
+
+/**
+ * Returns the address a contract will have when created from the provided address
+ * @param address
+ * @return address
+ */
+exports.getNextContractAddress = (address) => {
+  const nonce = web3.eth.getTransactionCount(address);
+  return util.bufferToHex(util.generateAddress(address, nonce));
+};

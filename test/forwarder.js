@@ -1,14 +1,19 @@
+require('should');
+
 const util = require('ethereumjs-util');
 const q = require('q');
+
+const helpers = require('./helpers');
+
 const Forwarder = artifacts.require('./Forwarder.sol');
 
-require('should');
+
 
 contract('Forwarder', function(accounts) {
   it('Basic forwarding test', function () {
     let forwardContract;
     let account0StartEther;
-    return Forwarder.new(undefined, { from: accounts[0] })
+    return Forwarder.new([accounts[0]])
     .then(function(result) {
       forwardContract = result;
       account0StartEther = web3.fromWei(web3.eth.getBalance(accounts[0]), 'ether');
@@ -34,10 +39,8 @@ contract('Forwarder', function(accounts) {
       return web3.eth.sendTransaction({ from: accounts[0], to: accounts[1], value: web3.toWei(0, 'ether') });
     })
     .then(function(txHash) {
-      const tx = web3.eth.getTransaction(txHash);
-      nextNonce = tx.nonce + 1;
       // determine the forwarder contract address
-      forwarderContractAddress = util.bufferToHex(util.generateAddress(accounts[0], nextNonce));
+      forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
 
       account0StartEther = web3.fromWei(web3.eth.getBalance(accounts[0]), 'ether');
       web3.fromWei(web3.eth.getBalance(accounts[1]), 'ether');
@@ -49,7 +52,7 @@ contract('Forwarder', function(accounts) {
       // Check that the ether is in the forwarder address and not yet in account 0
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(5));
       web3.fromWei(web3.eth.getBalance(accounts[0]), 'ether').should.eql(account0StartEther);
-      return Forwarder.new(undefined, { from: accounts[0] });
+      return Forwarder.new([accounts[0]], { from: accounts[0] });
     })
     .then(function(forwardContract) {
       contractCreated = forwardContract;
