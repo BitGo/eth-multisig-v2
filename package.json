@@ -23,14 +23,13 @@
     "bn": "^1.0.1",
     "bn.js": "^4.11.3",
     "ethereumjs-abi": "^0.6.4",
-    "ethereumjs-testrpc": "^6.0.1",
+    "ethereumjs-testrpc": "^6.0.3",
     "ethereumjs-util": "^5.1.2",
     "lodash": "^4.12.0",
-    "q": "^1.4.1",
+    "q": "^1.5.1",
     "should": "^8.3.1",
-    "truffle-expect": "^0.0.3",
-    "truffle-config": "^1.0.0",
-    "truffle": "^3.3.2",
-    "web3": "^0.16.0"
+    "truffle": "^4.0.1",
+    "truffle-config": "^1.0.3",
+    "truffle-expect": "^0.0.3"
   }
 }

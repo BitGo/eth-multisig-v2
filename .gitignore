@@ -1,6 +1,7 @@
 .config.js
 .DS_Store
 .idea
+*.iml
 npm-debug.log
 node_modules
 coverage
