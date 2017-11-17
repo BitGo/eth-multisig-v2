@@ -31,7 +31,7 @@ contract WalletSimple {
    */
   modifier onlysigner {
     if (!isSigner(msg.sender)) {
-      throw;
+      revert();
     }
     _;
   }
@@ -47,7 +47,7 @@ contract WalletSimple {
   function WalletSimple(address[] allowedSigners) public {
     if (allowedSigners.length != 3) {
       // Invalid number of signers
-      throw;
+      revert();
     }
     signers = allowedSigners;
   }
@@ -90,7 +90,7 @@ contract WalletSimple {
     // Success, send the transaction
     if (!(toAddress.call.value(value)(data))) {
       // Failed executing transaction
-      throw;
+      revert();
     }
     Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
   }
@@ -122,7 +122,7 @@ contract WalletSimple {
     
     ERC20Interface instance = ERC20Interface(tokenContractAddress);
     if (!instance.transfer(toAddress, value)) {
-        throw;
+        revert();
     }
   }
 
@@ -149,24 +149,24 @@ contract WalletSimple {
     // Verify if we are in safe mode. In safe mode, the wallet can only send to signers
     if (safeMode && !isSigner(toAddress)) {
       // We are in safe mode and the toAddress is not a signer. Disallow!
-      throw;
+      revert();
     }
     // Verify that the transaction has not expired
     if (expireTime < block.timestamp) {
       // Transaction expired
-      throw;
+      revert();
     }
 
-    // Try to insert the sequence ID. Will throw if the sequence id was invalid
+    // Try to insert the sequence ID. Will revert if the sequence id was invalid
     tryInsertSequenceId(sequenceId);
 
     if (!isSigner(otherSigner)) {
       // Other signer not on this wallet or operation does not match arguments
-      throw;
+      revert();
     }
     if (otherSigner == msg.sender) {
       // Cannot approve own transaction
-      throw;
+      revert();
     }
 
     return otherSigner;
@@ -206,7 +206,7 @@ contract WalletSimple {
     bytes signature
   ) private pure returns (address) {
     if (signature.length != 65) {
-      throw;
+      revert();
     }
     // We need to unpack the signature, which is given as an array of 65 bytes (from eth.sign)
     bytes32 r;
@@ -235,7 +235,7 @@ contract WalletSimple {
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
       if (recentSequenceIds[i] == sequenceId) {
         // This sequence ID has been used before. Disallow!
-        throw;
+        revert();
       }
       if (recentSequenceIds[i] < recentSequenceIds[lowestValueIndex]) {
         lowestValueIndex = i;
@@ -244,12 +244,12 @@ contract WalletSimple {
     if (sequenceId < recentSequenceIds[lowestValueIndex]) {
       // The sequence ID being used is lower than the lowest value in the window
       // so we cannot accept it as it may have been used before
-      throw;
+      revert();
     }
     if (sequenceId > (recentSequenceIds[lowestValueIndex] + 10000)) {
       // Block sequence IDs which are much higher than the lowest value
       // This prevents people blocking the contract by using very large sequence IDs quickly
-      throw;
+      revert();
     }
     recentSequenceIds[lowestValueIndex] = sequenceId;
   }

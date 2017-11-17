@@ -20,7 +20,7 @@ contract Forwarder {
    */
   function() public payable {
     if (!targetAddress.call.value(msg.value)(msg.data)) {
-      throw;
+      revert();
     }
     // Fire off the deposited event if we can forward it
     ForwarderDeposited(msg.sender, msg.value, msg.data);
@@ -38,7 +38,7 @@ contract Forwarder {
       return;
     }
     if (!instance.transfer(targetAddress, forwarderBalance)) {
-      throw;
+      revert();
     }
   }
 
@@ -48,7 +48,7 @@ contract Forwarder {
    */
   function flush() public {
     if (!targetAddress.call.value(this.balance)()) {
-      throw;
+      revert();
     }
   }
 }
