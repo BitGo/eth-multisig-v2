@@ -2,8 +2,30 @@ pragma solidity ^0.4.18;
 import "./Forwarder.sol";
 import "./ERC20Interface.sol";
 /**
+ *
+ * WalletSimple
+ * ============
+ *
  * Basic multi-signer wallet designed for use in a co-signing environment where 2 signatures are required to move funds.
  * Typically used in a 2-of-3 signing configuration. Uses ecrecover to allow for 2 signatures in a single transaction.
+ *
+ * The first signature is created on the operation hash (see Data Formats) and passed to sendMultiSig/sendMultiSigToken
+ * The signer is determined by verifyMultiSig().
+ *
+ * The second signature is created by the submitter of the transaction and determined by msg.signer.
+ *
+ * Data Formats
+ * ============
+ *
+ * The signature is created with ethereumjs-util.ecsign(operationHash).
+ * Like the eth_sign RPC call, it packs the values as a 65-byte array of [r, s, v].
+ * Unlike eth_sign, the message is not prefixed.
+ *
+ * The operationHash the result of keccak256(prefix, toAddress, value, data, expireTime).
+ * For ether transactions, `prefix` is "ETHER".
+ * For token transaction, `prefix` is "ERC20" and `data` is the tokenContractAddress.
+ *
+ *
  */
 contract WalletSimple {
   // Events
@@ -12,7 +34,7 @@ contract WalletSimple {
   event Transacted(
     address msgSender, // Address of the sender of the message initiating the transaction
     address otherSigner, // Address of the signer (second signature) used to initiate the transaction
-    bytes32 operation, // Operation hash (sha3 of toAddress, value, data, expireTime, sequenceId)
+    bytes32 operation, // Operation hash (see Data Formats)
     address toAddress, // The address the transaction was sent to
     uint value, // Amount of Wei sent to the address
     bytes data // Data sent when invoking the transaction
@@ -79,7 +101,6 @@ contract WalletSimple {
 
   /**
    * Execute a multi-signature transaction from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
-   * The signature is a signed form (using eth.sign) of tightly packed toAddress, value, data, expireTime and sequenceId
    * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.
    *
    * @param toAddress the destination address to send an outgoing transaction
@@ -87,7 +108,7 @@ contract WalletSimple {
    * @param data the data to send to the toAddress when invoking the transaction
    * @param expireTime the number of seconds since 1970 for which this transaction is valid
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
-   * @param signature the result of eth.sign on the operationHash sha3(toAddress, value, data, expireTime, sequenceId)
+   * @param signature see Data Formats
    */
   function sendMultiSig(
       address toAddress,
@@ -112,7 +133,6 @@ contract WalletSimple {
   
   /**
    * Execute a multi-signature token transfer from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
-   * The signature is a signed form (using eth.sign) of tightly packed toAddress, value, tokenContractAddress, expireTime and sequenceId
    * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.
    *
    * @param toAddress the destination address to send an outgoing transaction
@@ -120,7 +140,7 @@ contract WalletSimple {
    * @param tokenContractAddress the address of the erc20 token contract
    * @param expireTime the number of seconds since 1970 for which this transaction is valid
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
-   * @param signature the result of eth.sign on the operationHash sha3(toAddress, value, tokenContractAddress, expireTime, sequenceId)
+   * @param signature see Data Formats
    */
   function sendMultiSigToken(
       address toAddress,
@@ -145,11 +165,11 @@ contract WalletSimple {
    * Do common multisig verification for both eth sends and erc20token transfers
    *
    * @param toAddress the destination address to send an outgoing transaction
-   * @param operationHash the sha3 of the toAddress, value, data/tokenContractAddress and expireTime
-   * @param signature the tightly packed signature of r, s, and v as an array of 65 bytes (returned by eth.sign)
+   * @param operationHash see Data Formats
+   * @param signature see Data Formats
    * @param expireTime the number of seconds since 1970 for which this transaction is valid
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
-   * returns address of the address to send tokens or eth to
+   * returns address that has created the signature
    */
   function verifyMultiSig(
       address toAddress,
@@ -196,9 +216,9 @@ contract WalletSimple {
   }
 
   /**
-   * Gets the second signer's address using ecrecover
-   * @param operationHash the sha3 of the toAddress, value, data/tokenContractAddress and expireTime
-   * @param signature the tightly packed signature of r, s, and v as an array of 65 bytes (returned by eth.sign)
+   * Gets signer's address using ecrecover
+   * @param operationHash see Data Formats
+   * @param signature see Data Formats
    * returns address recovered from the signature
    */
   function recoverAddressFromSignature(
@@ -208,7 +228,7 @@ contract WalletSimple {
     if (signature.length != 65) {
       revert();
     }
-    // We need to unpack the signature, which is given as an array of 65 bytes (from eth.sign)
+    // We need to unpack the signature, which is given as an array of 65 bytes (like eth.sign)
     bytes32 r;
     bytes32 s;
     uint8 v;
