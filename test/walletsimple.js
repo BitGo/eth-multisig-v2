@@ -888,7 +888,7 @@ contract('WalletSimple', function(accounts) {
       forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
       const walletContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
 
-      yield wallet.flushForwarderTokens(forwarder.address, fixedSupplyTokenContract.address, { from: accounts[5] });
+      yield forwarder.flushTokens(fixedSupplyTokenContract.address, { from: accounts[5] });
       const forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarder.address);
       forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
 

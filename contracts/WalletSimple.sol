@@ -113,17 +113,6 @@ contract WalletSimple {
   }
 
   /**
-   * Execute a token flush from one of the forwarder addresses. This transfer needs only a single signature and can be done by any signer
-   *
-   * @param forwarderAddress the address of the forwarder address to flush the tokens from
-   * @param tokenContractAddress the address of the erc20 token contract
-   */
-  function flushForwarderTokens(address forwarderAddress, address tokenContractAddress) onlysigner {    
-    Forwarder forwarder = Forwarder(forwarderAddress);
-    forwarder.flushTokens(tokenContractAddress);
-  }  
-  
-  /**
    * Do common multisig verification for both eth sends and erc20token transfers
    *
    * @param toAddress the destination address to send an outgoing transaction
