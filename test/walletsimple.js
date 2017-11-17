@@ -876,20 +876,6 @@ contract('WalletSimple', function(accounts) {
       // Check wallet balance
       const msigWalletEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
       msigWalletStartTokens.minus(amount).should.eql(msigWalletEndTokens);
-      /* TODO Barath - Get event testing to work
-      yield helpers.waitForEvents(walletEvents, 3); // wait for events to come in
-      
-      // Check wallet events for Token Transacted event
-      var tokenTransactedEvent = _.find(walletEvents, function(event) {
-        return event.event === 'TokenTransacted';
-      });
-      tokenTransactedEvent.args.msgSender.should.eql(accounts[4]);
-      tokenTransactedEvent.args.otherSigner.should.eql(accounts[5]);
-      tokenTransactedEvent.args.operation.should.eql(util.addHexPrefix(operationHash.toString('hex'));
-      tokenTransactedEvent.args.value.should.eql(web3.toBigNumber(amount));
-      tokenTransactedEvent.args.toAddress.should.eql(destinationAccount);
-      tokenTransactedEvent.args.tokenContractAddress.should.eql(fixedSupplyTokenContract.address);
-      */
     }));
 
     it('Flush from Forwarder contract', co(function *() {

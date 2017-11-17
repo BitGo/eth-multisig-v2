@@ -17,14 +17,6 @@ contract WalletSimple {
     uint value, // Amount of Wei sent to the address
     bytes data // Data sent when invoking the transaction
   );
-  event TokenTransacted(
-    address msgSender, // Address of the sender of the message initiating the transaction
-    address otherSigner, // Address of the signer (second signature) used to initiate the transaction
-    bytes32 operation, // Operation hash (sha3 of toAddress, value, tokenContractAddress, expireTime, sequenceId)
-    address toAddress, // The address the transaction was sent to
-    uint value, // Amount of token sent
-    address tokenContractAddress // The contract address of the token
-  );
 
   // Public fields
   address[] public signers; // The addresses that can co-sign transactions on the wallet
@@ -112,13 +104,12 @@ contract WalletSimple {
     // Verify the other signer
     var operationHash = sha3("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
     
-    var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
+    verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
     
     ERC20Interface instance = ERC20Interface(tokenContractAddress);
     if (!instance.transfer(toAddress, value)) {
         throw;
     }
-    TokenTransacted(msg.sender, otherSigner, operationHash, toAddress, value, tokenContractAddress);
   }
 
   /**

@@ -8,11 +8,6 @@ contract Forwarder {
   address public targetAddress;
   event ForwarderDeposited(address from, uint value, bytes data);
 
-  event TokensFlushed(
-    address tokenContractAddress, // The contract address of the token
-    uint value // Amount of token sent
-  );
-
   /**
    * Create the contract, and set the destination address to `target`
    */
@@ -44,7 +39,6 @@ contract Forwarder {
     if (!instance.transfer(targetAddress, forwarderBalance)) {
       throw;
     }
-    TokensFlushed(tokenContractAddress, forwarderBalance);
   }
 
   /**
