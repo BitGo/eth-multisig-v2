@@ -13,7 +13,7 @@
   "extends": "eslint:recommended",
   "parserOptions": {
     "sourceType": "module",
-    "ecmaVersion": 6
+    "ecmaVersion": 2017
   },
   "rules": {
     "indent": ["error", 2, {"SwitchCase": 1, "MemberExpression": "off"}],
