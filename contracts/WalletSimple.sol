@@ -44,7 +44,7 @@ contract WalletSimple {
    *
    * @param allowedSigners An array of signers on the wallet
    */
-  function WalletSimple(address[] allowedSigners) {
+  function WalletSimple(address[] allowedSigners) public {
     if (allowedSigners.length != 3) {
       // Invalid number of signers
       throw;
@@ -55,7 +55,7 @@ contract WalletSimple {
   /**
    * Gets called when a transaction is received without calling a method
    */
-  function() payable {
+  function() public payable {
     if (msg.value > 0) {
       // Fire deposited event if we are receiving funds
       Deposited(msg.sender, msg.value, msg.data);
@@ -74,7 +74,14 @@ contract WalletSimple {
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
    * @param signature the result of eth.sign on the operationHash sha3(toAddress, value, data, expireTime, sequenceId)
    */
-  function sendMultiSig(address toAddress, uint value, bytes data, uint expireTime, uint sequenceId, bytes signature) onlysigner {
+  function sendMultiSig(
+      address toAddress,
+      uint value,
+      bytes data,
+      uint expireTime,
+      uint sequenceId,
+      bytes signature
+  ) public onlysigner {
     // Verify the other signer
     var operationHash = sha3("ETHER", toAddress, value, data, expireTime, sequenceId);
     
@@ -100,7 +107,14 @@ contract WalletSimple {
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
    * @param signature the result of eth.sign on the operationHash sha3(toAddress, value, tokenContractAddress, expireTime, sequenceId)
    */
-  function sendMultiSigToken(address toAddress, uint value, address tokenContractAddress, uint expireTime, uint sequenceId, bytes signature) onlysigner {
+  function sendMultiSigToken(
+      address toAddress,
+      uint value,
+      address tokenContractAddress,
+      uint expireTime,
+      uint sequenceId,
+      bytes signature
+  ) public onlysigner {
     // Verify the other signer
     var operationHash = sha3("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
     
@@ -122,7 +136,13 @@ contract WalletSimple {
    * @param sequenceId the unique sequence id obtainable from getNextSequenceId
    * returns address of the address to send tokens or eth to
    */
-  function verifyMultiSig(address toAddress, bytes32 operationHash, bytes signature, uint expireTime, uint sequenceId) private returns (address) {
+  function verifyMultiSig(
+      address toAddress,
+      bytes32 operationHash,
+      bytes signature,
+      uint expireTime,
+      uint sequenceId
+  ) private returns (address) {
 
     var otherSigner = recoverAddressFromSignature(operationHash, signature);
 
@@ -155,7 +175,7 @@ contract WalletSimple {
   /**
    * Irrevocably puts contract into safe mode. When in this mode, transactions may only be sent to signing addresses.
    */
-  function activateSafeMode() onlysigner {
+  function activateSafeMode() public onlysigner {
     safeMode = true;
     SafeModeActivated(msg.sender);
   }
@@ -165,7 +185,7 @@ contract WalletSimple {
    * @param signer address to check
    * returns boolean indicating whether address is signer or not
    */
-  function isSigner(address signer) returns (bool) {
+  function isSigner(address signer) public view returns (bool) {
     // Iterate through all signers on the wallet and
     for (uint i = 0; i < signers.length; i++) {
       if (signers[i] == signer) {
@@ -181,7 +201,10 @@ contract WalletSimple {
    * @param signature the tightly packed signature of r, s, and v as an array of 65 bytes (returned by eth.sign)
    * returns address recovered from the signature
    */
-  function recoverAddressFromSignature(bytes32 operationHash, bytes signature) private returns (address) {
+  function recoverAddressFromSignature(
+    bytes32 operationHash,
+    bytes signature
+  ) private pure returns (address) {
     if (signature.length != 65) {
       throw;
     }
@@ -206,7 +229,7 @@ contract WalletSimple {
    * greater than the minimum element in the window.
    * @param sequenceId to insert into array of stored ids
    */
-  function tryInsertSequenceId(uint sequenceId) onlysigner private {
+  function tryInsertSequenceId(uint sequenceId) private onlysigner {
     // Keep a pointer to the lowest value element in the window
     uint lowestValueIndex = 0;
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
@@ -235,7 +258,7 @@ contract WalletSimple {
    * Gets the next available sequence ID for signing when using executeAndConfirm
    * returns the sequenceId one higher than the highest currently stored
    */
-  function getNextSequenceId() returns (uint) {
+  function getNextSequenceId() public view returns (uint) {
     uint highestSequenceId = 0;
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
       if (recentSequenceIds[i] > highestSequenceId) {

@@ -11,17 +11,18 @@ contract Forwarder {
   /**
    * Create the contract, and set the destination address to `target`
    */
-  function Forwarder(address target) {
+  function Forwarder(address target) public {
     targetAddress = target;
   }
 
   /**
    * Default function; Gets called when Ether is deposited, and forwards it to the target address
    */
-  function() payable {
-    if (!targetAddress.call.value(msg.value)(msg.data))
+  function() public payable {
+    if (!targetAddress.call.value(msg.value)(msg.data)) {
       throw;
-    // Fire off the deposited event if we can forward it  
+    }
+    // Fire off the deposited event if we can forward it
     ForwarderDeposited(msg.sender, msg.value, msg.data);
   }
 
@@ -29,7 +30,7 @@ contract Forwarder {
    * Execute a token transfer of the full balance from the forwarder token to the target address
    * @param tokenContractAddress the address of the erc20 token contract
    */
-  function flushTokens(address tokenContractAddress) {
+  function flushTokens(address tokenContractAddress) public {
     ERC20Interface instance = ERC20Interface(tokenContractAddress);
     var forwarderAddress = address(this);
     var forwarderBalance = instance.balanceOf(forwarderAddress);
@@ -45,8 +46,9 @@ contract Forwarder {
    * It is possible that funds were sent to this address before the contract was deployed.
    * We can flush those funds to the target address.
    */
-  function flush() {
-    if (!targetAddress.call.value(this.balance)())
+  function flush() public {
+    if (!targetAddress.call.value(this.balance)()) {
       throw;
+    }
   }
 }
