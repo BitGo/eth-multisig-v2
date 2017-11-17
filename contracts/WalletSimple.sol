@@ -83,7 +83,7 @@ contract WalletSimple {
       bytes signature
   ) public onlysigner {
     // Verify the other signer
-    var operationHash = sha3("ETHER", toAddress, value, data, expireTime, sequenceId);
+    var operationHash = keccak256("ETHER", toAddress, value, data, expireTime, sequenceId);
     
     var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
 
@@ -116,7 +116,7 @@ contract WalletSimple {
       bytes signature
   ) public onlysigner {
     // Verify the other signer
-    var operationHash = sha3("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
+    var operationHash = keccak256("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
     
     verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
     
