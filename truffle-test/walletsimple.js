@@ -1,7 +1,6 @@
 require('assert');
 const should = require('should');
 const Promise = require('bluebird');
-const co = Promise.coroutine;
 const _ = require('lodash');
 
 const helpers = require('./helpers');
@@ -43,31 +42,31 @@ contract('WalletSimple', function(accounts) {
   // Taken from http://solidity.readthedocs.io/en/latest/frequently-asked-questions.html -
   // The automatic accessor function for a public state variable of array type only returns individual elements.
   // If you want to return the complete array, you have to manually write a function to do that.
-  const getSigners = co(function *getSigners(wallet) {
+  const getSigners = async function getSigners(wallet) {
     const signers = [];
     let i = 0;
     while (true) {
       try {
-        const signer = yield wallet.signers.call(i++);
+        const signer = await wallet.signers.call(i++);
         signers.push(signer);
       } catch (e) {
         break;
       }
     }
     return signers;
-  });
+  };
 
   describe('Wallet creation', function() {
-    it('2 of 3 multisig wallet', co(function *() {
-      const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+    it('2 of 3 multisig wallet', async function() {
+      const wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
 
-      const signers = yield getSigners(wallet);
+      const signers = await getSigners(wallet);
       signers.should.eql([accounts[0], accounts[1], accounts[2]]);
 
-      const isSafeMode = yield wallet.safeMode.call();
+      const isSafeMode = await wallet.safeMode.call();
       isSafeMode.should.eql(false);
 
-      const isSignerArray = yield Promise.all([
+      const isSignerArray = await Promise.all([
         wallet.isSigner.call(accounts[0]),
         wallet.isSigner.call(accounts[1]),
         wallet.isSigner.call(accounts[2]),
@@ -79,157 +78,157 @@ contract('WalletSimple', function(accounts) {
       isSignerArray[1].should.eql(true);
       isSignerArray[2].should.eql(true);
       isSignerArray[3].should.eql(false);
-    }));
+    });
 
-    it('Not enough signer addresses', co(function *() {
+    it('Not enough signer addresses', async function() {
       try {
-        yield WalletSimple.new([accounts[0]]);
+        await WalletSimple.new([accounts[0]]);
         throw new Error('should not be here');
       } catch(e) {
         e.message.should.not.containEql('should not be here');
       }
-    }));
+    });
   });
 
   describe('Deposits', function() {
-    before(co(function *() {
-      wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-    }));
+    before(async function() {
+      wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+    });
 
-    it('Should emit event on deposit', co(function *() {
+    it('Should emit event on deposit', async function() {
       web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(20, 'ether') });
-      yield helpers.waitForEvents(walletEvents, 1); // wait for events to come in
+      await helpers.waitForEvents(walletEvents, 1); // wait for events to come in
       const depositEvent = _.find(walletEvents, function(event) {
         return event.event === 'Deposited';
       });
       depositEvent.args.from.should.eql(accounts[0]);
       depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(20, 'ether')));
-    }));
+    });
 
-    it('Should emit event with data on deposit', co(function *() {
+    it('Should emit event with data on deposit', async function() {
       web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(30, 'ether'), data: '0xabcd' });
-      yield helpers.waitForEvents(walletEvents, 1); // wait for events to come in
+      await helpers.waitForEvents(walletEvents, 1); // wait for events to come in
       const depositEvent = _.find(walletEvents, function(event) {
         return event.event === 'Deposited';
       });
       depositEvent.args.from.should.eql(accounts[0]);
       depositEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(30, 'ether')));
       depositEvent.args.data.should.eql('0xabcd');
-    }));
+    });
   });
 
   /*
   Commented out because tryInsertSequenceId and recoverAddressFromSignature is private. Uncomment the private and tests to test this.
   Functionality is also tested in the sendMultiSig tests.
 
-  describe("Recover address from signature", function() {
-    before(co(function *() {
-      wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-    }));
+  describe('Recover address from signature', function() {
+    before(async function() {
+      wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+    });
 
-    it("Check for matching implementation with util.ecsign (50 iterations)", co(function *() {
+    it('Check for matching implementation with util.ecsign (50 iterations)', async function() {
       for (let i=0; i<50; i++) {
         // Get a random operation hash to sign
         const signerAddress = accounts[Math.floor(Math.random() * 10)];
         const sequenceId = Math.floor(Math.random() * 1000);
         const operationHash = helpers.getSha3ForConfirmationTx(
-          accounts[9], 10, "", Math.floor((new Date().getTime()) / 1000), sequenceId
+          accounts[9], 10, '', Math.floor((new Date().getTime()) / 1000), sequenceId
         );
         const sig = util.ecsign(operationHash, privateKeyForAccount(signerAddress));
         console.log(
-          (i+1) + ": Operation hash: " + operationHash.toString('hex') +
-          ", Signer: " + signerAddress + ", Sig: " + helpers.serializeSignature(sig)
+          (i+1) + ': Operation hash: ' + operationHash.toString('hex') +
+          ', Signer: ' + signerAddress + ', Sig: ' + helpers.serializeSignature(sig)
         );
-        const recoveredAddress = yield wallet.recoverAddressFromSignature.call(
+        const recoveredAddress = await wallet.recoverAddressFromSignature.call(
           util.addHexPrefix(operationHash.toString('hex')), helpers.serializeSignature(sig)
         );
         recoveredAddress.should.eql(signerAddress);
       }
-    }));
+    });
   });
 
-  describe("Sequence ID anti-replay protection", function() {
-    before(co(function *() {
-      wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-    }));
-
-    const getSequenceId = co(function *() {
-      const sequenceIdString = yield wallet.getNextSequenceId.call();
-      return parseInt(sequenceIdString);
+  describe('Sequence ID anti-replay protection', function() {
+    before(async function() {
+      wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
     });
 
-    it("Authorized signer can request and insert an id", co(function *() {
-      let sequenceId = yield getSequenceId();
-      sequenceId.should.eql(1);
-      yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
-      sequenceId = yield getSequenceId();
-      sequenceId.should.eql(2);
-    }));
+    const getSequenceId = async function() {
+      const sequenceIdString = await wallet.getNextSequenceId.call();
+      return parseInt(sequenceIdString);
+    };
 
-    it("Non-signer cannot insert an id", co(function *() {
-      const sequenceId = yield getSequenceId();
+    it('Authorized signer can request and insert an id', async function() {
+      let sequenceId = await getSequenceId();
+      sequenceId.should.eql(1);
+      await wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
+      sequenceId = await getSequenceId();
+      sequenceId.should.eql(2);
+    });
+
+    it('Non-signer cannot insert an id', async function() {
+      const sequenceId = await getSequenceId();
 
       try {
-        yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
-        throw new Error("should not have inserted successfully");
+        await wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
+        throw new Error('should not have inserted successfully');
       } catch(err) {
         assertVMException(err);
       }
 
       // should be unchanged
-      const newSequenceId = yield getSequenceId();
+      const newSequenceId = await getSequenceId();
       sequenceId.should.eql(newSequenceId);
-    }));
+    });
 
-    it("Can request large sequence ids", co(function *() {
+    it('Can request large sequence ids', async function() {
       for (let i=0; i<30; i++) {
-        let sequenceId = yield getSequenceId();
+        let sequenceId = await getSequenceId();
         // Increase by 100 each time to test for big numbers (there will be holes, this is ok)
         sequenceId += 100;
-        yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
-        const newSequenceId = yield getSequenceId();
+        await wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
+        const newSequenceId = await getSequenceId();
         newSequenceId.should.eql(sequenceId + 1);
       }
-    }));
+    });
 
-    it("Can request lower but unused recent sequence id within the window", co(function *() {
+    it('Can request lower but unused recent sequence id within the window', async function() {
       const windowSize = 10;
-      let sequenceId = yield getSequenceId();
-      let originalNextSequenceId = sequenceId;
+      let sequenceId = await getSequenceId();
+      const originalNextSequenceId = sequenceId;
       // Try for 9 times (windowsize - 1) because the last window was used already
       for (let i=0; i < (windowSize - 1); i++) {
         sequenceId -= 5; // since we were incrementing 100 per time, this should be unused
-        yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
+        await wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
       }
-      let newSequenceId = yield getSequenceId();
+      const newSequenceId = await getSequenceId();
       // we should still get the same next sequence id since we were using old ids
       newSequenceId.should.eql(originalNextSequenceId);
-    }));
+    });
 
-    it("Cannot request lower but used recent sequence id within the window", co(function *() {
-      let sequenceId = yield getSequenceId();
+    it('Cannot request lower but used recent sequence id within the window', async function() {
+      let sequenceId = await getSequenceId();
       sequenceId -= 50; // we used this in the previous test
       try {
-        yield wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
-        throw new Error("should not have inserted successfully");
+        await wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
+        throw new Error('should not have inserted successfully');
       } catch(err) {
         assertVMException(err);
       }
-    }));
+    });
 
-    it("Cannot request lower used sequence id outside the window", co(function *() {
+    it('Cannot request lower used sequence id outside the window', async function() {
       try {
-        yield wallet.tryInsertSequenceId(1, { from: accounts[8] });
-        throw new Error("should not have inserted successfully");
+        await wallet.tryInsertSequenceId(1, { from: accounts[8] });
+        throw new Error('should not have inserted successfully');
       } catch(err) {
         assertVMException(err);
       }
-    }));
+    });
   });
   */
 
   // Helper to get the operation hash, sign it, and then send it using sendMultiSig
-  const sendMultiSigTestHelper = co(function *(params) {
+  const sendMultiSigTestHelper = async function(params) {
     assert(params.msgSenderAddress);
     assert(params.otherSignerAddress);
     assert(params.wallet);
@@ -255,7 +254,7 @@ contract('WalletSimple', function(accounts) {
     );
     const sig = util.ecsign(operationHash, privateKeyForAccount(params.otherSignerAddress));
 
-    yield params.wallet.sendMultiSig(
+    await params.wallet.sendMultiSig(
       msgSenderArgs.toAddress,
       web3.toWei(msgSenderArgs.amount, 'ether'),
       msgSenderArgs.data,
@@ -264,14 +263,14 @@ contract('WalletSimple', function(accounts) {
       helpers.serializeSignature(sig),
       { from: params.msgSenderAddress }
     );
-  });
+  };
 
   // Helper to expect successful execute and confirm
-  const expectSuccessfulSendMultiSig = co(function *(params) {
+  const expectSuccessfulSendMultiSig = async function(params) {
     const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
     const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
 
-    const result = yield sendMultiSigTestHelper(params);
+    const result = await sendMultiSigTestHelper(params);
 
     // Check the post-transaction balances
     const destinationAccountEndEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
@@ -280,15 +279,15 @@ contract('WalletSimple', function(accounts) {
     msigWalletStartEther.minus(params.amount).should.eql(msigWalletEndEther);
 
     return result;
-  });
+  };
 
   // Helper to expect failed execute and confirm
-  const expectFailSendMultiSig = co(function *(params) {
+  const expectFailSendMultiSig = async function(params) {
     const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(params.toAddress), 'ether');
     const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
 
     try {
-      yield sendMultiSigTestHelper(params);
+      await sendMultiSigTestHelper(params);
       throw new Error('should not have sent successfully');
     } catch(err) {
       assertVMException(err);
@@ -299,23 +298,23 @@ contract('WalletSimple', function(accounts) {
     destinationAccountStartEther.plus(0).should.eql(destinationAccountEndEther);
     const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(params.wallet.address), 'ether');
     msigWalletStartEther.minus(0).should.eql(msigWalletEndEther);
-  });
+  };
 
   describe('Transaction sending using sendMultiSig', function() {
-    before(co(function *() {
+    before(async function() {
       // Create and fund the wallet
-      wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+      wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
       web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(200000, 'ether') });
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200000));
-    }));
+    });
     let sequenceId;
-    beforeEach(co(function *() {
+    beforeEach(async function() {
       // Run before each test. Sets the sequence ID up to be used in the tests
-      const sequenceIdString = yield wallet.getNextSequenceId.call();
+      const sequenceIdString = await wallet.getNextSequenceId.call();
       sequenceId = parseInt(sequenceIdString);
-    }));
+    });
 
-    it('Send out 50 ether with sendMultiSig', co(function *() {
+    it('Send out 50 ether with sendMultiSig', async function() {
       // We are not using the helper here because we want to check the operation hash in events
       const destinationAccount = accounts[5];
       const amount = 50;
@@ -328,7 +327,7 @@ contract('WalletSimple', function(accounts) {
       const operationHash = helpers.getSha3ForConfirmationTx(destinationAccount, amount, data, expireTime, sequenceId);
       const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[1]));
 
-      yield wallet.sendMultiSig(
+      await wallet.sendMultiSig(
         destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
         { from: accounts[0] }
       );
@@ -339,7 +338,7 @@ contract('WalletSimple', function(accounts) {
       const msigWalletEndEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
       msigWalletStartEther.minus(amount).should.eql(msigWalletEndEther);
 
-      yield helpers.waitForEvents(walletEvents, 2); // wait for events to come in
+      await helpers.waitForEvents(walletEvents, 2); // wait for events to come in
 
       // Check wallet events for Transacted event
       const transactedEvent = _.find(walletEvents, function(event) {
@@ -351,9 +350,9 @@ contract('WalletSimple', function(accounts) {
       transactedEvent.args.value.should.eql(web3.toBigNumber(web3.toWei(amount, 'ether')));
       transactedEvent.args.toAddress.should.eql(destinationAccount);
       transactedEvent.args.data.should.eql(util.addHexPrefix(new Buffer(data).toString('hex')));
-    }));
+    });
 
-    it('Stress test: 20 rounds of sendMultiSig', co(function *() {
+    it('Stress test: 20 rounds of sendMultiSig', async function() {
       for (let round=0; round < 20; round++) {
         const destinationAccount = accounts[2];
         const amount = _.random(1,9);
@@ -370,7 +369,7 @@ contract('WalletSimple', function(accounts) {
 
         const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
-        yield wallet.sendMultiSig(
+        await wallet.sendMultiSig(
           destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
           { from: accounts[1] }
         );
@@ -386,9 +385,9 @@ contract('WalletSimple', function(accounts) {
         // Increment sequence id
         sequenceId++;
       }
-    }));
+    });
 
-    it('Stress test: 10 rounds of attempting to reuse sequence ids - should fail', co(function *() {
+    it('Stress test: 10 rounds of attempting to reuse sequence ids - should fail', async function() {
       sequenceId -= 10; // these sequence ids already used
       for (let round=0; round < 10; round++) {
         const destinationAccount = accounts[2];
@@ -406,7 +405,7 @@ contract('WalletSimple', function(accounts) {
         const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         try {
-          yield wallet.sendMultiSig(
+          await wallet.sendMultiSig(
             destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
             { from: accounts[1] }
           );
@@ -426,10 +425,10 @@ contract('WalletSimple', function(accounts) {
         // Increment sequence id
         sequenceId++;
       }
-    }));
+    });
 
-    it('Stress test: 20 rounds of confirming in a single tx from an incorrect sender - should fail', co(function *() {
-      const sequenceIdString = yield wallet.getNextSequenceId.call();
+    it('Stress test: 20 rounds of confirming in a single tx from an incorrect sender - should fail', async function() {
+      const sequenceIdString = await wallet.getNextSequenceId.call();
       sequenceId = parseInt(sequenceIdString);
 
       for (let round=0; round < 20; round++) {
@@ -447,7 +446,7 @@ contract('WalletSimple', function(accounts) {
         const destinationAccountStartEther = web3.fromWei(web3.eth.getBalance(destinationAccount), 'ether');
         const msigWalletStartEther = web3.fromWei(web3.eth.getBalance(wallet.address), 'ether');
         try {
-          yield wallet.sendMultiSig(
+          await wallet.sendMultiSig(
             destinationAccount, web3.toWei(amount, 'ether'), data, expireTime, sequenceId, helpers.serializeSignature(sig),
             { from: accounts[1] }
           );
@@ -467,9 +466,9 @@ contract('WalletSimple', function(accounts) {
         // Increment sequence id
         sequenceId++;
       }
-    }));
+    });
 
-    it('Msg sender changing the amount should fail', co(function *() {
+    it('Msg sender changing the amount should fail', async function() {
       const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
@@ -486,10 +485,10 @@ contract('WalletSimple', function(accounts) {
         amount: 20
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Msg sender changing the destination account should fail', co(function *() {
+    it('Msg sender changing the destination account should fail', async function() {
       const params = {
         msgSenderAddress: accounts[1],
         otherSignerAddress: accounts[0],
@@ -506,10 +505,10 @@ contract('WalletSimple', function(accounts) {
         toAddress: accounts[6]
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Msg sender changing the data should fail', co(function *() {
+    it('Msg sender changing the data should fail', async function() {
       const params = {
         msgSenderAddress: accounts[1],
         otherSignerAddress: accounts[2],
@@ -526,10 +525,10 @@ contract('WalletSimple', function(accounts) {
         data: '12bcde'
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Msg sender changing the expire time should fail', co(function *() {
+    it('Msg sender changing the expire time should fail', async function() {
       const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
@@ -546,10 +545,10 @@ contract('WalletSimple', function(accounts) {
         expireTime: Math.floor((new Date().getTime()) / 1000) + 1000
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Same owner signing twice should fail', co(function *() {
+    it('Same owner signing twice should fail', async function() {
       const params = {
         msgSenderAddress: accounts[2],
         otherSignerAddress: accounts[2],
@@ -561,10 +560,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Sending from an unauthorized signer (but valid other signature) should fail', co(function *() {
+    it('Sending from an unauthorized signer (but valid other signature) should fail', async function() {
       const params = {
         msgSenderAddress: accounts[7],
         otherSignerAddress: accounts[2],
@@ -576,10 +575,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Sending from an authorized signer (but unauthorized other signer) should fail', co(function *() {
+    it('Sending from an authorized signer (but unauthorized other signer) should fail', async function() {
       const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[6],
@@ -591,11 +590,11 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
     let usedSequenceId;
-    it('Sending with expireTime very far out should work', co(function *() {
+    it('Sending with expireTime very far out should work', async function() {
       const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[1],
@@ -607,11 +606,11 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectSuccessfulSendMultiSig(params);
+      await expectSuccessfulSendMultiSig(params);
       usedSequenceId = sequenceId;
-    }));
+    });
 
-    it('Sending with expireTime in the past should fail', co(function *() {
+    it('Sending with expireTime in the past should fail', async function() {
       const params = {
         msgSenderAddress: accounts[0],
         otherSignerAddress: accounts[2],
@@ -623,10 +622,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Can send with a sequence ID that is not sequential but higher than previous', co(function *() {
+    it('Can send with a sequence ID that is not sequential but higher than previous', async function() {
       sequenceId = 1000;
       const params = {
         msgSenderAddress: accounts[1],
@@ -639,10 +638,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectSuccessfulSendMultiSig(params);
-    }));
+      await expectSuccessfulSendMultiSig(params);
+    });
 
-    it('Can send with a sequence ID that is unused but lower than the previous (not strictly monotonic increase)', co(function *() {
+    it('Can send with a sequence ID that is unused but lower than the previous (not strictly monotonic increase)', async function() {
       sequenceId = 200;
       const params = {
         msgSenderAddress: accounts[0],
@@ -655,10 +654,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectSuccessfulSendMultiSig(params);
-    }));
+      await expectSuccessfulSendMultiSig(params);
+    });
 
-    it('Send with a sequence ID that has been previously used should fail', co(function *() {
+    it('Send with a sequence ID that has been previously used should fail', async function() {
       sequenceId = usedSequenceId || (sequenceId - 1);
       const params = {
         msgSenderAddress: accounts[2],
@@ -671,10 +670,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Send with a sequence ID that is used many transactions ago (lower than previous 10) should fail', co(function *() {
+    it('Send with a sequence ID that is used many transactions ago (lower than previous 10) should fail', async function() {
       sequenceId = 1;
       const params = {
         msgSenderAddress: accounts[0],
@@ -687,44 +686,44 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
   });
 
   describe('Safe mode', function() {
-    before(co(function *() {
+    before(async function() {
       // Create and fund the wallet
-      wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+      wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
       web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(50000, 'ether') });
-    }));
+    });
 
-    it('Cannot be activated by unauthorized user', co(function *() {
+    it('Cannot be activated by unauthorized user', async function() {
       try {
-        yield wallet.activateSafeMode({ from: accounts[5] });
+        await wallet.activateSafeMode({ from: accounts[5] });
         throw new Error('should not be here');
       } catch(err) {
         assertVMException(err);
       }
-      const isSafeMode = yield wallet.safeMode.call();
+      const isSafeMode = await wallet.safeMode.call();
       isSafeMode.should.eql(false);
-    }));
+    });
 
-    it('Can be activated by any authorized signer', co(function *() {
+    it('Can be activated by any authorized signer', async function() {
       for (let i=0; i<3; i++) {
-        const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-        yield wallet.activateSafeMode({ from: accounts[i] });
-        const isSafeMode = yield wallet.safeMode.call();
+        const wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+        await wallet.activateSafeMode({ from: accounts[i] });
+        const isSafeMode = await wallet.safeMode.call();
         isSafeMode.should.eql(true);
       }
-    }));
+    });
 
-    it('Cannot send transactions to external addresses in safe mode', co(function *() {
-      let isSafeMode = yield wallet.safeMode.call();
+    it('Cannot send transactions to external addresses in safe mode', async function() {
+      let isSafeMode = await wallet.safeMode.call();
       isSafeMode.should.eql(false);
-      yield wallet.activateSafeMode({ from: accounts[1] });
-      isSafeMode = yield wallet.safeMode.call();
+      await wallet.activateSafeMode({ from: accounts[1] });
+      isSafeMode = await wallet.safeMode.call();
       isSafeMode.should.eql(true);
-      yield helpers.waitForEvents(walletEvents, 1);
+      await helpers.waitForEvents(walletEvents, 1);
       const safeModeEvent = _.find(walletEvents, function(event) {
         return event.event === 'SafeModeActivated';
       });
@@ -742,10 +741,10 @@ contract('WalletSimple', function(accounts) {
         sequenceId: 10001
       };
 
-      yield expectFailSendMultiSig(params);
-    }));
+      await expectFailSendMultiSig(params);
+    });
 
-    it('Can send transactions to signer addresses in safe mode', co(function *() {
+    it('Can send transactions to signer addresses in safe mode', async function() {
       const params = {
         msgSenderAddress: accounts[2],
         otherSignerAddress: accounts[1],
@@ -757,17 +756,17 @@ contract('WalletSimple', function(accounts) {
         sequenceId: 9000
       };
 
-      yield expectSuccessfulSendMultiSig(params);
-    }));
+      await expectSuccessfulSendMultiSig(params);
+    });
   });
 
   describe('Forwarder addresses', function() {
     const forwardAbi = [{ constant: false,inputs: [],name: 'flush',outputs: [],type: 'function' },{ constant: true,inputs: [],name: 'destinationAddress',outputs: [{ name: '',type: 'address' }],type: 'function' },{ inputs: [],type: 'constructor' }];
     const forwardContract = web3.eth.contract(forwardAbi);
 
-    it('Create and forward', co(function *() {
-      const wallet = yield WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      const forwarder = yield Forwarder.new([wallet.address]);
+    it('Create and forward', async function() {
+      const wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+      const forwarder = await Forwarder.new([wallet.address]);
       web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
 
       web3.eth.sendTransaction({ from: accounts[1], to: forwarder.address, value: web3.toWei(200, 'ether') });
@@ -775,31 +774,31 @@ contract('WalletSimple', function(accounts) {
       // Verify funds forwarded
       web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200));
-    }));
+    });
 
-    it('Multiple forward contracts', co(function *() {
+    it('Multiple forward contracts', async function() {
       const numForwardAddresses = 10;
       const etherEachSend = 4;
-      const wallet = yield WalletSimple.new([accounts[2], accounts[3], accounts[4]]);
+      const wallet = await WalletSimple.new([accounts[2], accounts[3], accounts[4]]);
 
       // Create forwarders and send 4 ether to each of the addresses
       for (let i=0; i < numForwardAddresses; i++) {
-        const forwarder = yield Forwarder.new([wallet.address]);
+        const forwarder = await Forwarder.new([wallet.address]);
         web3.eth.sendTransaction({ from: accounts[1], to: forwarder.address, value: web3.toWei(etherEachSend, 'ether') });
       }
 
       // Verify all the forwarding is complete
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(etherEachSend * numForwardAddresses));
-    }));
+    });
 
-    it('Send before create, then flush', co(function *() {
-      const wallet = yield WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
+    it('Send before create, then flush', async function() {
+      const wallet = await WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
       const forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      const forwarder = yield Forwarder.new([wallet.address], { from: accounts[0] });
+      const forwarder = await Forwarder.new([wallet.address], { from: accounts[0] });
       forwarder.address.should.eql(forwarderContractAddress);
 
       // Verify that funds are still stuck in forwarder contract address
@@ -810,16 +809,16 @@ contract('WalletSimple', function(accounts) {
       forwardContract.at(forwarderContractAddress).flush({ from: accounts[0] });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
-    }));
+    });
 
-    it('Flush sent from external account', co(function *() {
-      const wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
+    it('Flush sent from external account', async function() {
+      const wallet = await WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
       const forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      const forwarder = yield Forwarder.new([wallet.address], { from: accounts[0] });
+      const forwarder = await Forwarder.new([wallet.address], { from: accounts[0] });
       forwarder.address.should.eql(forwarderContractAddress);
 
       // Verify that funds are still stuck in forwarder contract address
@@ -830,35 +829,35 @@ contract('WalletSimple', function(accounts) {
       forwardContract.at(forwarder.address).flush({ from: accounts[0] });
       web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(300));
-    }));
+    });
   });
 
   describe('ERC20 token transfers', function() {
     let fixedSupplyTokenContract;
-    before(co(function *() {
+    before(async function() {
       // Create and fund the wallet
-      wallet = yield WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
-      fixedSupplyTokenContract = yield FixedSupplyToken.new(undefined, { from: accounts[0] });
-      const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      wallet = await WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
+      fixedSupplyTokenContract = await FixedSupplyToken.new(undefined, { from: accounts[0] });
+      const balance = await fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000));
-    }));
+    });
 
-    it('Receive and Send tokens from main wallet contract', co(function *() {
+    it('Receive and Send tokens from main wallet contract', async function() {
       
-      yield fixedSupplyTokenContract.transfer(wallet.address, 100, { from: accounts[0] });
-      const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+      await fixedSupplyTokenContract.transfer(wallet.address, 100, { from: accounts[0] });
+      const balance = await fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100));
-      const msigWalletStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const msigWalletStartTokens = await fixedSupplyTokenContract.balanceOf.call(wallet.address);
       msigWalletStartTokens.should.eql(web3.toBigNumber(100));
       
-      const sequenceIdString = yield wallet.getNextSequenceId.call();
+      const sequenceIdString = await wallet.getNextSequenceId.call();
       const sequenceId = parseInt(sequenceIdString);
 
       const destinationAccount = accounts[5];
       const amount = 50;
       const expireTime = Math.floor((new Date().getTime()) / 1000) + 60; // 60 seconds
 
-      const destinationAccountStartTokens = yield fixedSupplyTokenContract.balanceOf.call(accounts[5]);
+      const destinationAccountStartTokens = await fixedSupplyTokenContract.balanceOf.call(accounts[5]);
       destinationAccountStartTokens.should.eql(web3.toBigNumber(0));
 
       const operationHash = helpers.getSha3ForConfirmationTokenTx(
@@ -866,38 +865,38 @@ contract('WalletSimple', function(accounts) {
       );
       const sig = util.ecsign(operationHash, privateKeyForAccount(accounts[4]));
 
-      yield wallet.sendMultiSigToken(
+      await wallet.sendMultiSigToken(
         destinationAccount, amount, fixedSupplyTokenContract.address, expireTime, sequenceId, helpers.serializeSignature(sig),
         { from: accounts[5] }
       );
-      const destinationAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(destinationAccount);
+      const destinationAccountEndTokens = await fixedSupplyTokenContract.balanceOf.call(destinationAccount);
       destinationAccountStartTokens.plus(amount).should.eql(destinationAccountEndTokens);
 
       // Check wallet balance
-      const msigWalletEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const msigWalletEndTokens = await fixedSupplyTokenContract.balanceOf.call(wallet.address);
       msigWalletStartTokens.minus(amount).should.eql(msigWalletEndTokens);
-    }));
+    });
 
-    it('Flush from Forwarder contract', co(function *() {
-      const forwarder = yield Forwarder.new([wallet.address]);
-      yield fixedSupplyTokenContract.transfer(forwarder.address, 100, { from: accounts[0] });
-      const balance = yield fixedSupplyTokenContract.balanceOf.call(accounts[0]);
+    it('Flush from Forwarder contract', async function() {
+      const forwarder = await Forwarder.new([wallet.address]);
+      await fixedSupplyTokenContract.transfer(forwarder.address, 100, { from: accounts[0] });
+      const balance = await fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100 - 100));
 
-      const forwarderContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarder.address);
+      const forwarderContractStartTokens = await fixedSupplyTokenContract.balanceOf.call(forwarder.address);
       forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
-      const walletContractStartTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const walletContractStartTokens = await fixedSupplyTokenContract.balanceOf.call(wallet.address);
 
-      yield forwarder.flushTokens(fixedSupplyTokenContract.address, { from: accounts[5] });
-      const forwarderAccountEndTokens = yield fixedSupplyTokenContract.balanceOf.call(forwarder.address);
+      await forwarder.flushTokens(fixedSupplyTokenContract.address, { from: accounts[5] });
+      const forwarderAccountEndTokens = await fixedSupplyTokenContract.balanceOf.call(forwarder.address);
       forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
 
       // Check wallet balance
-      const walletContractEndTokens = yield fixedSupplyTokenContract.balanceOf.call(wallet.address);
+      const walletContractEndTokens = await fixedSupplyTokenContract.balanceOf.call(wallet.address);
       walletContractStartTokens.plus(100).should.eql(walletContractEndTokens);
       /* TODO Barath - Get event testing for forwarder contract token send to work
       */
-    }));
+    });
 
   });
 

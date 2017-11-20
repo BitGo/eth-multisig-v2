@@ -1,4 +1,4 @@
-const util = require("ethereumjs-util");
+const util = require('ethereumjs-util');
 
 exports.accounts = [
   '0xc8209c2200f920b11a460733c91687565c712b40c6f0350e9ad4138bf3193e47',

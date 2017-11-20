@@ -1,9 +1,9 @@
 module.exports = {
   networks: {
     development: {
-      host: "localhost",
+      host: 'localhost',
       port: 8545,
-      network_id: "*", // Match any network id
+      network_id: '*', // Match any network id
       // https://github.com/trufflesuite/truffle/issues/271#issuecomment-341651827
       gas: 2900000
     }
