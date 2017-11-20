@@ -19,7 +19,7 @@ A test suite is included through the use of the truffle framework, providing cov
 
 ## Installation
 
-NodeJS 5.0+ is recommended. 
+NodeJS 8.9.0 is recommended.
 
 ```shell
 npm install
@@ -36,7 +36,7 @@ Find it at [contracts/WalletSimple.sol](contracts/WalletSimple.sol)
 The truffle framework will depend on the Web3 interface to a local Web3 Ethereum JSON-RPC. If you've followed the above steps, run the following to start testrpc. 
 
 ```shell
-npm run testrpc
+npm run truffle-testrpc
 ```
 
 You should verify that you are not already running geth, as this will cause the tests to run against that interface. 
@@ -44,5 +44,5 @@ You should verify that you are not already running geth, as this will cause the 
 In a **separate terminal window**, run the following command to initiate the test suite, which will run against the RPC:
 
 ```shell
-npm test
+npm truffle-test
 ```

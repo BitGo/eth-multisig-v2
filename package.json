@@ -11,7 +11,7 @@
   "scripts": {
     "truffle-testrpc": "./testrpc/run.js",
     "mocha-test": "./node_modules/mocha/bin/mocha mocha-test",
-    "truffle-test": "./node_modules/truffle/build/cli.bundled.js truffle-test"
+    "truffle-test": "./node_modules/truffle/build/cli.bundled.js test"
   },
   "keywords": [
     "multi-sig",
