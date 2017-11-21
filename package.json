@@ -9,7 +9,7 @@
     "test": "test"
   },
   "scripts": {
-    "truffle-testrpc": "./testrpc/run.js",
+    "truffle-testrpc": "node ./testrpc/run.js",
     "mocha-test": "./node_modules/mocha/bin/mocha mocha-test",
     "truffle-test": "./node_modules/truffle/build/cli.bundled.js test"
   },
