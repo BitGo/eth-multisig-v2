@@ -19,9 +19,8 @@ contract Forwarder {
    * Default function; Gets called when Ether is deposited, and forwards it to the target address
    */
   function() public payable {
-    if (!targetAddress.call.value(msg.value)(msg.data)) {
-      revert();
-    }
+    // throws on failure
+    targetAddress.transfer(msg.value);
     // Fire off the deposited event if we can forward it
     ForwarderDeposited(msg.sender, msg.value, msg.data);
   }
@@ -47,8 +46,7 @@ contract Forwarder {
    * We can flush those funds to the target address.
    */
   function flush() public {
-    if (!targetAddress.call.value(this.balance)()) {
-      revert();
-    }
+    // throws on failure
+    targetAddress.transfer(this.balance);
   }
 }

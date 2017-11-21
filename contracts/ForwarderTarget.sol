@@ -18,4 +18,8 @@ contract ForwarderTarget {
     data = d;
     return b;
   }
+
+  function() payable {
+    // accept unspendable balance
+  }
 }
