@@ -27,16 +27,6 @@ contract WalletSimple {
   uint[10] recentSequenceIds;
 
   /**
-   * Modifier that will execute internal code block only if the sender is an authorized signer on this wallet
-   */
-  modifier onlysigner {
-    if (!isSigner(msg.sender)) {
-      revert();
-    }
-    _;
-  }
-
-  /**
    * Set up a simple multi-sig wallet by specifying the signers allowed to be used on this wallet.
    * 2 signers will be required to send a transaction from this wallet.
    * Note: The sender is NOT automatically added to the list of signers.
@@ -50,6 +40,31 @@ contract WalletSimple {
       revert();
     }
     signers = allowedSigners;
+  }
+
+  /**
+   * Determine if an address is a signer on this wallet
+   * @param signer address to check
+   * returns boolean indicating whether address is signer or not
+   */
+  function isSigner(address signer) public view returns (bool) {
+    // Iterate through all signers on the wallet and
+    for (uint i = 0; i < signers.length; i++) {
+      if (signers[i] == signer) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Modifier that will execute internal code block only if the sender is an authorized signer on this wallet
+   */
+  modifier onlySigner {
+    if (!isSigner(msg.sender)) {
+      revert();
+    }
+    _;
   }
 
   /**
@@ -81,7 +96,7 @@ contract WalletSimple {
       uint expireTime,
       uint sequenceId,
       bytes signature
-  ) public onlysigner {
+  ) public onlySigner {
     // Verify the other signer
     var operationHash = keccak256("ETHER", toAddress, value, data, expireTime, sequenceId);
     
@@ -114,7 +129,7 @@ contract WalletSimple {
       uint expireTime,
       uint sequenceId,
       bytes signature
-  ) public onlysigner {
+  ) public onlySigner {
     // Verify the other signer
     var operationHash = keccak256("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
     
@@ -175,24 +190,9 @@ contract WalletSimple {
   /**
    * Irrevocably puts contract into safe mode. When in this mode, transactions may only be sent to signing addresses.
    */
-  function activateSafeMode() public onlysigner {
+  function activateSafeMode() public onlySigner {
     safeMode = true;
     SafeModeActivated(msg.sender);
-  }
-
-  /**
-   * Determine if an address is a signer on this wallet
-   * @param signer address to check
-   * returns boolean indicating whether address is signer or not
-   */
-  function isSigner(address signer) public view returns (bool) {
-    // Iterate through all signers on the wallet and
-    for (uint i = 0; i < signers.length; i++) {
-      if (signers[i] == signer) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**
@@ -229,7 +229,7 @@ contract WalletSimple {
    * greater than the minimum element in the window.
    * @param sequenceId to insert into array of stored ids
    */
-  function tryInsertSequenceId(uint sequenceId) private onlysigner {
+  function tryInsertSequenceId(uint sequenceId) private onlySigner {
     // Keep a pointer to the lowest value element in the window
     uint lowestValueIndex = 0;
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
