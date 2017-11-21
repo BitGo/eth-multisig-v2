@@ -776,6 +776,49 @@ contract('WalletSimple', function(accounts) {
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200));
     });
 
+    it('Forwards value and call data', async function () {
+      // When calling a nonexistent method on forwarder, delegate call to the target address.
+      // While the WalletSimple contract has no side-effect methods that can be called from arbitrary msg.sender,
+      // this could change in the future.
+      // Simulate this with a ForwarderContract that has a side effect.
+      const ForwarderTarget = artifacts.require('./ForwarderTarget.sol');
+      const forwarderTarget = await ForwarderTarget.new();
+      const forwarder = await Forwarder.new([forwarderTarget.address]);
+      const forwarderAsTarget = ForwarderTarget.at(forwarder.address);
+      const newData = 0xc0fefe;
+
+
+      // The return value for ForwarderTarget.setData*()
+      const setDataReturn = true;
+      await forwarderAsTarget.setData(newData, setDataReturn);
+      (await forwarderTarget.data.call()).should.eql(web3.toBigNumber(newData));
+
+      try {
+        // if the called func returns false, no side effect
+        const setDataReturn = false;
+        await forwarderAsTarget.setData(newData + 1, setDataReturn);
+      } catch (err) {
+        assertVMException(err);
+        (await forwarderTarget.data.call()).should.eql(web3.toBigNumber(newData));
+      }
+
+
+      // Same for setDataWithValue()
+      await forwarderAsTarget.setDataWithValue(newData + 1, setDataReturn, { value: 100 });
+      const data = await forwarderTarget.data.call();
+      data.should.eql(web3.toBigNumber(newData + 1));
+      web3.eth.getBalance(forwarderTarget.address).should.eql(web3.toBigNumber(100));
+
+      try {
+        const setDataReturn = false;
+        await forwarderTarget.setDataWithValue(newData + 2, setDataReturn, { value: 100 });
+      } catch (err) {
+        assertVMException(err);
+        (await forwarderTarget.data.call()).should.eql(web3.toBigNumber(newData + 1));
+        web3.eth.getBalance(forwarderTarget.address).should.eql(web3.toBigNumber(100));
+      }
+    });
+
     it('Multiple forward contracts', async function() {
       const numForwardAddresses = 10;
       const etherEachSend = 4;
