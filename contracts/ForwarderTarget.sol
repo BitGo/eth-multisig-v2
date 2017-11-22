@@ -1,6 +1,8 @@
 pragma solidity ^0.4.18;
 
 
+import "./Forwarder.sol";
+
 // This is a test target for a Forwarder.
 // It contains a public function with a side-effect.
 contract ForwarderTarget {
@@ -19,7 +21,11 @@ contract ForwarderTarget {
     return b;
   }
 
-  function() payable {
+  function createForwarder() public {
+    new Forwarder();
+  }
+
+  function() public payable {
     // accept unspendable balance
   }
 }

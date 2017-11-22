@@ -100,6 +100,14 @@ contract WalletSimple {
   }
 
   /**
+   * Create a new contract (and also address) that forwards funds to this contract
+   * returns address of newly created forwarder address
+   */
+  function createForwarder() public returns (address) {
+    return new Forwarder();
+  }
+
+  /**
    * Execute a multi-signature transaction from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
    * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.
    *
@@ -159,6 +167,20 @@ contract WalletSimple {
     if (!instance.transfer(toAddress, value)) {
         revert();
     }
+  }
+  
+  /**
+   * Execute a token flush from one of the forwarder addresses. This transfer needs only a single signature and can be done by any signer
+   *
+   * @param forwarderAddress the address of the forwarder address to flush the tokens from
+   * @param tokenContractAddress the address of the erc20 token contract
+   */
+  function flushForwarderTokens(
+    address forwarderAddress, 
+    address tokenContractAddress
+  ) public onlySigner {
+    Forwarder forwarder = Forwarder(forwarderAddress);
+    forwarder.flushTokens(tokenContractAddress);
   }
 
   /**

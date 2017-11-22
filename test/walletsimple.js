@@ -18,6 +18,12 @@ const assertVMException = (err) => {
   err.message.toString().should.startWith('VM Exception');
 };
 
+const createForwarderFromWallet = async (wallet) => {
+  const forwarderAddress = helpers.getNextContractAddress(wallet.address);
+  await wallet.createForwarder();
+  return Forwarder.at(forwarderAddress);
+};
+
 contract('WalletSimple', function(accounts) {
   let wallet;
   let walletEvents;
@@ -766,7 +772,7 @@ contract('WalletSimple', function(accounts) {
 
     it('Create and forward', async function() {
       const wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
-      const forwarder = await Forwarder.new([wallet.address]);
+      const forwarder = await createForwarderFromWallet(wallet);
       web3.fromWei(web3.eth.getBalance(forwarder.address), 'ether').should.eql(web3.toBigNumber(0));
 
       web3.eth.sendTransaction({ from: accounts[1], to: forwarder.address, value: web3.toWei(200, 'ether') });
@@ -787,7 +793,8 @@ contract('WalletSimple', function(accounts) {
       const ForwarderTarget = artifacts.require('./ForwarderTarget.sol');
 
       const forwarderTarget = await ForwarderTarget.new();
-      const forwarder = await Forwarder.new([forwarderTarget.address]);
+      // can be passed for wallet since it has the same interface
+      const forwarder = await createForwarderFromWallet(forwarderTarget);
       const events = [];
       forwarder.allEvents({}, (err, event) => {
         if (err) { throw err; }
@@ -828,7 +835,7 @@ contract('WalletSimple', function(accounts) {
 
       // Create forwarders and send 4 ether to each of the addresses
       for (let i=0; i < numForwardAddresses; i++) {
-        const forwarder = await Forwarder.new([wallet.address]);
+        const forwarder = await createForwarderFromWallet(wallet);
         web3.eth.sendTransaction({ from: accounts[1], to: forwarder.address, value: web3.toWei(etherEachSend, 'ether') });
       }
 
@@ -838,12 +845,12 @@ contract('WalletSimple', function(accounts) {
 
     it('Send before create, then flush', async function() {
       const wallet = await WalletSimple.new([accounts[3], accounts[4], accounts[5]]);
-      const forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
+      const forwarderContractAddress = helpers.getNextContractAddress(wallet.address);
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      const forwarder = await Forwarder.new([wallet.address], { from: accounts[0] });
+      const forwarder = await createForwarderFromWallet(wallet);
       forwarder.address.should.eql(forwarderContractAddress);
 
       // Verify that funds are still stuck in forwarder contract address
@@ -858,12 +865,12 @@ contract('WalletSimple', function(accounts) {
 
     it('Flush sent from external account', async function() {
       const wallet = await WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
-      const forwarderContractAddress = helpers.getNextContractAddress(accounts[0]);
+      const forwarderContractAddress = helpers.getNextContractAddress(wallet.address);
       web3.eth.sendTransaction({ from: accounts[1], to: forwarderContractAddress, value: web3.toWei(300, 'ether') });
       web3.fromWei(web3.eth.getBalance(forwarderContractAddress), 'ether').should.eql(web3.toBigNumber(300));
       web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(0));
 
-      const forwarder = await Forwarder.new([wallet.address], { from: accounts[0] });
+      const forwarder = await createForwarderFromWallet(wallet);
       forwarder.address.should.eql(forwarderContractAddress);
 
       // Verify that funds are still stuck in forwarder contract address
@@ -923,7 +930,7 @@ contract('WalletSimple', function(accounts) {
     });
 
     it('Flush from Forwarder contract', async function() {
-      const forwarder = await Forwarder.new([wallet.address]);
+      const forwarder = await createForwarderFromWallet(wallet);
       await fixedSupplyTokenContract.transfer(forwarder.address, 100, { from: accounts[0] });
       const balance = await fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100 - 100));
@@ -932,7 +939,7 @@ contract('WalletSimple', function(accounts) {
       forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
       const walletContractStartTokens = await fixedSupplyTokenContract.balanceOf.call(wallet.address);
 
-      await forwarder.flushTokens(fixedSupplyTokenContract.address, { from: accounts[5] });
+      await wallet.flushForwarderTokens(forwarder.address, fixedSupplyTokenContract.address, { from: accounts[5] });
       const forwarderAccountEndTokens = await fixedSupplyTokenContract.balanceOf.call(forwarder.address);
       forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
 
