@@ -44,5 +44,5 @@ You should verify that you are not already running geth, as this will cause the 
 In a **separate terminal window**, run the following command to initiate the test suite, which will run against the RPC:
 
 ```shell
-npm truffle-test
+npm run truffle-test
 ```
