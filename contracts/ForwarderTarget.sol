@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.24;
 
 
 import "./Forwarder.sol";
@@ -6,9 +6,9 @@ import "./Forwarder.sol";
 // This is a test target for a Forwarder.
 // It contains a public function with a side-effect.
 contract ForwarderTarget {
-  uint public data;
+  uint256 public data;
 
-  function ForwarderTarget() public {
+  constructor() public {
   }
 
   function setDataWithValue(uint d, bool b) payable public returns (bool) {

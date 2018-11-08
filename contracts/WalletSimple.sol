@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.24;
 import "./Forwarder.sol";
 import "./ERC20Interface.sol";
 /**
@@ -56,7 +56,7 @@ contract WalletSimple {
    *
    * @param allowedSigners An array of signers on the wallet
    */
-  function WalletSimple(address[] allowedSigners) public {
+  constructor(address[] allowedSigners) public {
     if (allowedSigners.length != 3) {
       // Invalid number of signers
       revert();
@@ -95,7 +95,7 @@ contract WalletSimple {
   function() public payable {
     if (msg.value > 0) {
       // Fire deposited event if we are receiving funds
-      Deposited(msg.sender, msg.value, msg.data);
+      emit Deposited(msg.sender, msg.value, msg.data);
     }
   }
 
@@ -127,16 +127,16 @@ contract WalletSimple {
       bytes signature
   ) public onlySigner {
     // Verify the other signer
-    var operationHash = keccak256("ETHER", toAddress, value, data, expireTime, sequenceId);
+    bytes32 operationHash = keccak256(abi.encodePacked("ETHER", toAddress, value, data, expireTime, sequenceId));
     
-    var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
+    address otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
 
     // Success, send the transaction
     if (!(toAddress.call.value(value)(data))) {
       // Failed executing transaction
       revert();
     }
-    Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
+    emit Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
   }
   
   /**
@@ -159,7 +159,7 @@ contract WalletSimple {
       bytes signature
   ) public onlySigner {
     // Verify the other signer
-    var operationHash = keccak256("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
+    bytes32 operationHash = keccak256(abi.encodePacked("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId));
     
     verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
     
@@ -201,7 +201,7 @@ contract WalletSimple {
       uint sequenceId
   ) private returns (address) {
 
-    var otherSigner = recoverAddressFromSignature(operationHash, signature);
+    address otherSigner = recoverAddressFromSignature(operationHash, signature);
 
     // Verify if we are in safe mode. In safe mode, the wallet can only send to signers
     if (safeMode && !isSigner(toAddress)) {
@@ -234,7 +234,7 @@ contract WalletSimple {
    */
   function activateSafeMode() public onlySigner {
     safeMode = true;
-    SafeModeActivated(msg.sender);
+    emit SafeModeActivated(msg.sender);
   }
 
   /**
