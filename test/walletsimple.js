@@ -24,6 +24,11 @@ const createForwarderFromWallet = async (wallet) => {
   return Forwarder.at(forwarderAddress);
 };
 
+const getSequenceId = async function(wallet) {
+  const sequenceIdString = await wallet.getNextSequenceId.call();
+  return parseInt(sequenceIdString);
+};
+
 contract('WalletSimple', function(accounts) {
   let wallet;
   let walletEvents;
@@ -158,21 +163,16 @@ contract('WalletSimple', function(accounts) {
       wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
     });
 
-    const getSequenceId = async function() {
-      const sequenceIdString = await wallet.getNextSequenceId.call();
-      return parseInt(sequenceIdString);
-    };
-
     it('Authorized signer can request and insert an id', async function() {
-      let sequenceId = await getSequenceId();
+      let sequenceId = await getSequenceId(wallet);
       sequenceId.should.eql(1);
       await wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
-      sequenceId = await getSequenceId();
+      sequenceId = await getSequenceId(wallet);
       sequenceId.should.eql(2);
     });
 
     it('Non-signer cannot insert an id', async function() {
-      const sequenceId = await getSequenceId();
+      const sequenceId = await getSequenceId(wallet);
 
       try {
         await wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
@@ -182,37 +182,37 @@ contract('WalletSimple', function(accounts) {
       }
 
       // should be unchanged
-      const newSequenceId = await getSequenceId();
+      const newSequenceId = await getSequenceId(wallet);
       sequenceId.should.eql(newSequenceId);
     });
 
     it('Can request large sequence ids', async function() {
       for (let i=0; i<30; i++) {
-        let sequenceId = await getSequenceId();
+        let sequenceId = await getSequenceId(wallet);
         // Increase by 100 each time to test for big numbers (there will be holes, this is ok)
         sequenceId += 100;
         await wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
-        const newSequenceId = await getSequenceId();
+        const newSequenceId = await getSequenceId(wallet);
         newSequenceId.should.eql(sequenceId + 1);
       }
     });
 
     it('Can request lower but unused recent sequence id within the window', async function() {
       const windowSize = 10;
-      let sequenceId = await getSequenceId();
+      let sequenceId = await getSequenceId(wallet);
       const originalNextSequenceId = sequenceId;
       // Try for 9 times (windowsize - 1) because the last window was used already
       for (let i=0; i < (windowSize - 1); i++) {
         sequenceId -= 5; // since we were incrementing 100 per time, this should be unused
         await wallet.tryInsertSequenceId(sequenceId, { from: accounts[0] });
       }
-      const newSequenceId = await getSequenceId();
+      const newSequenceId = await getSequenceId(wallet);
       // we should still get the same next sequence id since we were using old ids
       newSequenceId.should.eql(originalNextSequenceId);
     });
 
     it('Cannot request lower but used recent sequence id within the window', async function() {
-      let sequenceId = await getSequenceId();
+      let sequenceId = await getSequenceId(wallet);
       sequenceId -= 50; // we used this in the previous test
       try {
         await wallet.tryInsertSequenceId(sequenceId, { from: accounts[8] });
@@ -696,6 +696,54 @@ contract('WalletSimple', function(accounts) {
     });
   });
 
+  describe('Get Next Sequence Id', function() {
+    before(async function() {
+      // Create and fund the wallet
+      wallet = await WalletSimple.new([accounts[0], accounts[1], accounts[2]]);
+      web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value: web3.toWei(200000, 'ether') });
+      web3.fromWei(web3.eth.getBalance(wallet.address), 'ether').should.eql(web3.toBigNumber(200000));
+    });
+
+    it('returns 1 for first sequence number', async () => {
+      const sequenceId = await getSequenceId(wallet);
+      sequenceId.should.eql(1);
+    });
+
+    it('can send with exactly 10,000 higher than lowest sequence number', async () => {
+      const params = {
+        msgSenderAddress: accounts[2],
+        otherSignerAddress: accounts[1],
+        wallet: wallet,
+        toAddress: accounts[5],
+        amount: 62,
+        data: '',
+        expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
+        sequenceId: '10000'
+      };
+
+      await expectSuccessfulSendMultiSig(params);
+    });
+
+    it('still returns a usable next sequence ID after tx with seq id 10,000 higher than lowest in recentSequenceIds', async () => {
+      const sequenceId = await getSequenceId(wallet);
+
+      sequenceId.should.eql(1);
+
+      const params = {
+        msgSenderAddress: accounts[2],
+        otherSignerAddress: accounts[1],
+        wallet: wallet,
+        toAddress: accounts[5],
+        amount: 62,
+        data: '',
+        expireTime: Math.floor((new Date().getTime()) / 1000) + 60,
+        sequenceId: sequenceId
+      };
+
+      await expectSuccessfulSendMultiSig(params);
+    });
+  })
+
   describe('Safe mode', function() {
     before(async function() {
       // Create and fund the wallet
@@ -895,13 +943,13 @@ contract('WalletSimple', function(accounts) {
     });
 
     it('Receive and Send tokens from main wallet contract', async function() {
-      
+
       await fixedSupplyTokenContract.transfer(wallet.address, 100, { from: accounts[0] });
       const balance = await fixedSupplyTokenContract.balanceOf.call(accounts[0]);
       balance.should.eql(web3.toBigNumber(1000000 - 100));
       const msigWalletStartTokens = await fixedSupplyTokenContract.balanceOf.call(wallet.address);
       msigWalletStartTokens.should.eql(web3.toBigNumber(100));
-      
+
       const sequenceIdString = await wallet.getNextSequenceId.call();
       const sequenceId = parseInt(sequenceIdString);
 
@@ -953,4 +1001,3 @@ contract('WalletSimple', function(accounts) {
   });
 
 });
-

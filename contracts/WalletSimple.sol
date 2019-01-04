@@ -1,4 +1,5 @@
 pragma solidity ^0.4.18;
+
 import "./Forwarder.sol";
 import "./ERC20Interface.sol";
 /**
@@ -39,14 +40,14 @@ contract WalletSimple {
     uint value, // Amount of Wei sent to the address
     bytes data // Data sent when invoking the transaction
   );
-
   // Public fields
   address[] public signers; // The addresses that can co-sign transactions on the wallet
   bool public safeMode = false; // When active, wallet may only send to signer addresses
+  // make public so they can be read in case something goes sideways with sequence ids
+  uint[10] public recentSequenceIds;
 
   // Internal fields
   uint constant SEQUENCE_ID_WINDOW_SIZE = 10;
-  uint[10] recentSequenceIds;
 
   /**
    * Set up a simple multi-sig wallet by specifying the signers allowed to be used on this wallet.
@@ -63,7 +64,6 @@ contract WalletSimple {
     }
     signers = allowedSigners;
   }
-
   /**
    * Determine if an address is a signer on this wallet
    * @param signer address to check
@@ -78,7 +78,6 @@ contract WalletSimple {
     }
     return false;
   }
-
   /**
    * Modifier that will execute internal code block only if the sender is an authorized signer on this wallet
    */
@@ -88,7 +87,6 @@ contract WalletSimple {
     }
     _;
   }
-
   /**
    * Gets called when a transaction is received without calling a method
    */
@@ -98,7 +96,6 @@ contract WalletSimple {
       Deposited(msg.sender, msg.value, msg.data);
     }
   }
-
   /**
    * Create a new contract (and also address) that forwards funds to this contract
    * returns address of newly created forwarder address
@@ -106,7 +103,6 @@ contract WalletSimple {
   function createForwarder() public returns (address) {
     return new Forwarder();
   }
-
   /**
    * Execute a multi-signature transaction from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
    * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.
@@ -128,9 +124,7 @@ contract WalletSimple {
   ) public onlySigner {
     // Verify the other signer
     var operationHash = keccak256("ETHER", toAddress, value, data, expireTime, sequenceId);
-    
     var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
-
     // Success, send the transaction
     if (!(toAddress.call.value(value)(data))) {
       // Failed executing transaction
@@ -138,7 +132,7 @@ contract WalletSimple {
     }
     Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
   }
-  
+
   /**
    * Execute a multi-signature token transfer from this wallet using 2 signers: one from msg.sender and the other from ecrecover.
    * Sequence IDs are numbers starting from 1. They are used to prevent replay attacks and may not be repeated.
@@ -160,15 +154,14 @@ contract WalletSimple {
   ) public onlySigner {
     // Verify the other signer
     var operationHash = keccak256("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
-    
     verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
-    
+
     ERC20Interface instance = ERC20Interface(tokenContractAddress);
     if (!instance.transfer(toAddress, value)) {
         revert();
     }
   }
-  
+
   /**
    * Execute a token flush from one of the forwarder addresses. This transfer needs only a single signature and can be done by any signer
    *
@@ -176,13 +169,12 @@ contract WalletSimple {
    * @param tokenContractAddress the address of the erc20 token contract
    */
   function flushForwarderTokens(
-    address forwarderAddress, 
+    address forwarderAddress,
     address tokenContractAddress
   ) public onlySigner {
     Forwarder forwarder = Forwarder(forwarderAddress);
     forwarder.flushTokens(tokenContractAddress);
   }
-
   /**
    * Do common multisig verification for both eth sends and erc20token transfers
    *
@@ -200,9 +192,7 @@ contract WalletSimple {
       uint expireTime,
       uint sequenceId
   ) private returns (address) {
-
     var otherSigner = recoverAddressFromSignature(operationHash, signature);
-
     // Verify if we are in safe mode. In safe mode, the wallet can only send to signers
     if (safeMode && !isSigner(toAddress)) {
       // We are in safe mode and the toAddress is not a signer. Disallow!
@@ -213,10 +203,8 @@ contract WalletSimple {
       // Transaction expired
       revert();
     }
-
     // Try to insert the sequence ID. Will revert if the sequence id was invalid
     tryInsertSequenceId(sequenceId);
-
     if (!isSigner(otherSigner)) {
       // Other signer not on this wallet or operation does not match arguments
       revert();
@@ -225,10 +213,8 @@ contract WalletSimple {
       // Cannot approve own transaction
       revert();
     }
-
     return otherSigner;
   }
-
   /**
    * Irrevocably puts contract into safe mode. When in this mode, transactions may only be sent to signing addresses.
    */
@@ -236,7 +222,6 @@ contract WalletSimple {
     safeMode = true;
     SafeModeActivated(msg.sender);
   }
-
   /**
    * Gets signer's address using ecrecover
    * @param operationHash see Data Formats
@@ -264,7 +249,6 @@ contract WalletSimple {
     }
     return ecrecover(operationHash, v, r, s);
   }
-
   /**
    * Verify that the sequence id has not been used before and inserts it. Throws if the sequence ID was not accepted.
    * We collect a window of up to 10 recent sequence ids, and allow any sequence id that is not in the window and
@@ -295,18 +279,43 @@ contract WalletSimple {
     }
     recentSequenceIds[lowestValueIndex] = sequenceId;
   }
-
   /**
-   * Gets the next available sequence ID for signing when using executeAndConfirm
-   * returns the sequenceId one higher than the highest currently stored
+   * Gets the next available sequence ID for signing.
+   * Returns the sequenceId one higher than the highest value
+   * in the lowest sequence
+   *
+   * IE, if recentSequenceIds == [0,100,200,40,75,10,1,4,2,5], return 3
    */
   function getNextSequenceId() public view returns (uint) {
-    uint highestSequenceId = 0;
+    // first, find the lowest value index
+    uint lowestValueIndex = 0;
     for (uint i = 0; i < SEQUENCE_ID_WINDOW_SIZE; i++) {
-      if (recentSequenceIds[i] > highestSequenceId) {
-        highestSequenceId = recentSequenceIds[i];
+      if (recentSequenceIds[i] < recentSequenceIds[lowestValueIndex]) {
+        lowestValueIndex = i;
       }
     }
-    return highestSequenceId + 1;
+
+    // then, iterate through the sequenceIds until it finds an available one
+    uint nextSequenceId = recentSequenceIds[lowestValueIndex] + 1;
+    bool found = false;
+
+    for (uint j = 0; j <= SEQUENCE_ID_WINDOW_SIZE; j++) {
+      // zero points for elegance
+      found = false;
+      for (uint k = 0; k < SEQUENCE_ID_WINDOW_SIZE; k++) {
+        if (nextSequenceId == recentSequenceIds[k]) {
+          found = true;
+        }
+      }
+
+      // if it's not in the array, it's an available slot
+      if (!found) {
+        break;
+      }
+
+      nextSequenceId++;
+    }
+
+    return nextSequenceId;
   }
 }
