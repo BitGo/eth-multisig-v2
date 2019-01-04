@@ -721,7 +721,7 @@ contract('WalletSimple', function(accounts) {
         sequenceId: '10000'
       };
 
-      expectSuccessfulSendMultiSig(params);
+      await expectSuccessfulSendMultiSig(params);
     });
 
     it('still returns a usable next sequence ID after tx with seq id 10,000 higher than lowest in recentSequenceIds', async () => {
@@ -740,7 +740,7 @@ contract('WalletSimple', function(accounts) {
         sequenceId: sequenceId
       };
 
-      expectSuccessfulSendMultiSig(params);
+      await expectSuccessfulSendMultiSig(params);
     });
   })
 
