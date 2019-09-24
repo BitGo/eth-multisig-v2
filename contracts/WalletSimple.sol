@@ -183,6 +183,15 @@ contract WalletSimple {
     forwarder.flushTokens(tokenContractAddress);
   }
 
+
+  function flushForwarderNoReturnTransferTokens(
+    address forwarderAddress, 
+    address tokenContractAddress
+  ) public onlySigner {
+    Forwarder forwarder = Forwarder(forwarderAddress);
+    forwarder.flushNoReturnTransferTokens(tokenContractAddress);
+  }
+
   /**
    * Do common multisig verification for both eth sends and erc20token transfers
    *

@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const WalletSimple = artifacts.require('./WalletSimple.sol');
 const Forwarder = artifacts.require('./Forwarder.sol');
 const FixedSupplyToken = artifacts.require('./FixedSupplyToken.sol');
+const FixedSupplyNoReturnTransferToken = artifacts.require('./FixedSupplyNoReturnTransferToken.sol');
 
 const assertVMException = (err) => {
   err.message.toString().should.startWith('VM Exception');
@@ -949,8 +950,46 @@ contract('WalletSimple', function(accounts) {
       /* TODO Barath - Get event testing for forwarder contract token send to work
       */
     });
-
   });
 
+  describe('No Return Transfer ERC20 token transfers', function() {
+    let fixedSupplyNoReturnTransferTokenContract;
+    before(async function() {
+      // Create and fund the wallet
+      wallet = await WalletSimple.new([accounts[4], accounts[5], accounts[6]]);
+      fixedSupplyNoReturnTransferTokenContract = await FixedSupplyNoReturnTransferToken.new(undefined, { from: accounts[0] });
+      const balance = await fixedSupplyNoReturnTransferTokenContract.balanceOf.call(accounts[0]);
+      console.log(balance);
+      balance.should.eql(web3.toBigNumber(1000000));
+    });
+
+    it('Flush from Forwarder contract', async function() {
+      const forwarder = await createForwarderFromWallet(wallet);
+      await fixedSupplyNoReturnTransferTokenContract.transfer(forwarder.address, 100, { from: accounts[0] });
+      const balance = await fixedSupplyNoReturnTransferTokenContract.balanceOf.call(accounts[0]);
+
+      balance.should.eql(web3.toBigNumber(1000000 - 100));
+
+      const forwarderContractStartTokens = await fixedSupplyNoReturnTransferTokenContract.balanceOf.call(forwarder.address);
+      forwarderContractStartTokens.should.eql(web3.toBigNumber(100));
+      const walletContractStartTokens = await fixedSupplyNoReturnTransferTokenContract.balanceOf.call(wallet.address);
+
+      try {
+        await wallet.flushForwarderTokens(forwarder.address, fixedSupplyNoReturnTransferTokenContract.address, { from: accounts[5] });
+        throw new Error('trying to flush NoReturnTransferERC20 through flushForwarderTokens function should fail');
+      } catch(err) {
+        assertVMException(err);
+      }
+
+      await wallet.flushForwarderNoReturnTransferTokens(forwarder.address, fixedSupplyNoReturnTransferTokenContract.address, { from: accounts[5] });
+      
+      const forwarderAccountEndTokens = await fixedSupplyNoReturnTransferTokenContract.balanceOf.call(forwarder.address);
+      forwarderAccountEndTokens.should.eql(web3.toBigNumber(0));
+
+      // Check wallet balance
+      const walletContractEndTokens = await fixedSupplyNoReturnTransferTokenContract.balanceOf.call(wallet.address);
+      walletContractStartTokens.plus(100).should.eql(walletContractEndTokens);
+    });
+  });
 });
 
