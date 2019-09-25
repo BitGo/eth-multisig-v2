@@ -1,5 +1,6 @@
 pragma solidity ^0.4.18;
 import "./ERC20Interface.sol";
+import "./NoReturnTransferERC20Interface.sol";
 /**
  * Contract that will forward any incoming Ether to the creator of the contract
  */
@@ -51,6 +52,17 @@ contract Forwarder {
     }
   }
 
+  function flushNoReturnTransferTokens(address tokenContractAddress) public onlyParent {
+    NoReturnTransferERC20Interface instance = NoReturnTransferERC20Interface(tokenContractAddress);
+    var forwarderAddress = address(this);
+    var forwarderBalance = instance.balanceOf(forwarderAddress);
+    if (forwarderBalance == 0) {
+      return;
+    }
+    
+    instance.transfer(parentAddress, forwarderBalance);
+  }
+
   /**
    * It is possible that funds were sent to this address before the contract was deployed.
    * We can flush those funds to the parent address.
@@ -60,3 +72,6 @@ contract Forwarder {
     parentAddress.transfer(this.balance);
   }
 }
+
+
+

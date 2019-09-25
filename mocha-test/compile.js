@@ -15,7 +15,9 @@ process.on('unhandledRejection', (r) => {
 describe('Contracts', async () => {
   const contracts = [
     'ERC20Interface.sol',
+    'NoReturnTransferERC20Interface.sol',
     'FixedSupplyToken.sol',
+    'FixedSupplyNoReturnTransferToken.sol',
     'Forwarder.sol',
     'WalletSimple.sol'
   ];
@@ -39,3 +41,4 @@ describe('Contracts', async () => {
     );
   });
 });
+
