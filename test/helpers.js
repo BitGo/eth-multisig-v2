@@ -36,18 +36,18 @@ exports.waitForEvents = function(eventsArray, numEvents) {
 };
 
 // Helper to get sha3 for solidity tightly-packed arguments
-exports.getSha3ForConfirmationTx = function(toAddress, amount, data, expireTime, sequenceId) {
+exports.getSha3ForConfirmationTx = function(prefix, toAddress, amount, data, expireTime, sequenceId) {
   return abi.soliditySHA3(
     ['string', 'address', 'uint', 'string', 'uint', 'uint'],
-    ['ETHER', new BN(toAddress.replace('0x', ''), 16), web3.toWei(amount, 'ether'), data, expireTime, sequenceId]
+    [prefix, new BN(toAddress.replace('0x', ''), 16), web3.toWei(amount, 'ether'), data, expireTime, sequenceId]
   );
 };
 
 // Helper to get token transactions sha3 for solidity tightly-packed arguments
-exports.getSha3ForConfirmationTokenTx = function(toAddress, value, tokenContractAddress, expireTime, sequenceId) {
+exports.getSha3ForConfirmationTokenTx = function(prefix, toAddress, value, tokenContractAddress, expireTime, sequenceId) {
   return abi.soliditySHA3(
     ['string', 'address', 'uint', 'address', 'uint', 'uint'],
-    ['ERC20', new BN(toAddress.replace('0x', ''), 16), value, new BN(tokenContractAddress.replace('0x', ''), 16), expireTime, sequenceId]
+    [prefix, new BN(toAddress.replace('0x', ''), 16), value, new BN(tokenContractAddress.replace('0x', ''), 16), expireTime, sequenceId]
   );
 };
 

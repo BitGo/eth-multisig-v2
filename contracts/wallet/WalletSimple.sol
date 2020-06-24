@@ -1,6 +1,6 @@
 pragma solidity ^0.4.18;
-import "./Forwarder.sol";
-import "./ERC20Interface.sol";
+import "../Forwarder.sol";
+import "../ERC20Interface.sol";
 /**
  *
  * WalletSimple
@@ -43,6 +43,8 @@ contract WalletSimple {
   // Public fields
   address[] public signers; // The addresses that can co-sign transactions on the wallet
   bool public safeMode = false; // When active, wallet may only send to signer addresses
+  string private _nativeSendPrefix;
+  string private _tokenSendPrefix;
 
   // Internal fields
   uint constant SEQUENCE_ID_WINDOW_SIZE = 10;
@@ -55,13 +57,17 @@ contract WalletSimple {
    * Signers CANNOT be changed once they are set
    *
    * @param allowedSigners An array of signers on the wallet
+   * @param nativeSendPrefix string constant which will be included in signatures to send native coins
+   * @param tokenSendPrefix string constant which will be included in signatures to send tokens
    */
-  function WalletSimple(address[] allowedSigners) public {
+  function WalletSimple(address[] allowedSigners, string memory nativeSendPrefix, string memory tokenSendPrefix) public {
     if (allowedSigners.length != 3) {
       // Invalid number of signers
       revert();
     }
     signers = allowedSigners;
+    _nativeSendPrefix = nativeSendPrefix;
+    _tokenSendPrefix = tokenSendPrefix;
   }
 
   /**
@@ -127,7 +133,7 @@ contract WalletSimple {
       bytes signature
   ) public onlySigner {
     // Verify the other signer
-    var operationHash = keccak256("ETHER", toAddress, value, data, expireTime, sequenceId);
+    var operationHash = keccak256(_nativeSendPrefix, toAddress, value, data, expireTime, sequenceId);
     
     var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
 
@@ -159,7 +165,7 @@ contract WalletSimple {
       bytes signature
   ) public onlySigner {
     // Verify the other signer
-    var operationHash = keccak256("ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
+    var operationHash = keccak256(_tokenSendPrefix, toAddress, value, tokenContractAddress, expireTime, sequenceId);
     
     verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
     
