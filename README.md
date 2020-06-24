@@ -19,7 +19,7 @@ A test suite is included through the use of the truffle framework, providing cov
 
 ## Installation
 
-NodeJS 8.9.0 is recommended.
+NodeJS 8.14.0 is recommended.
 
 ```shell
 npm install
