@@ -17,7 +17,11 @@ describe('Contracts', async () => {
     'ERC20Interface.sol',
     'FixedSupplyToken.sol',
     'Forwarder.sol',
-    'WalletSimple.sol'
+    'WalletSimple.sol',
+    'WalletSimple.sol',
+    'coins/EtcWalletSimple.sol',
+    'coins/RskWalletSimple.sol',
+    'coins/CeloWalletSimple.sol',
   ];
 
   let result;
