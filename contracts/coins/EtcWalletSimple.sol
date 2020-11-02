@@ -1,4 +1,5 @@
-pragma solidity ^0.4.18;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.5 <0.8.0;
 import "../Forwarder.sol";
 import "../ERC20Interface.sol";
 /**
@@ -56,7 +57,7 @@ contract EtcWalletSimple {
    *
    * @param allowedSigners An array of signers on the wallet
    */
-  function EtcWalletSimple(address[] allowedSigners) public {
+  constructor(address[] memory allowedSigners) public {
     if (allowedSigners.length != 3) {
       // Invalid number of signers
       revert();
@@ -92,10 +93,10 @@ contract EtcWalletSimple {
   /**
    * Gets called when a transaction is received without calling a method
    */
-  function() public payable {
+  function() external payable {
     if (msg.value > 0) {
       // Fire deposited event if we are receiving funds
-      Deposited(msg.sender, msg.value, msg.data);
+      emit Deposited(msg.sender, msg.value, msg.data);
     }
   }
 
@@ -104,7 +105,7 @@ contract EtcWalletSimple {
    * returns address of newly created forwarder address
    */
   function createForwarder() public returns (address) {
-    return new Forwarder();
+    return address(new Forwarder());
   }
 
   /**
@@ -121,22 +122,33 @@ contract EtcWalletSimple {
   function sendMultiSig(
       address toAddress,
       uint value,
-      bytes data,
+      bytes memory data,
       uint expireTime,
       uint sequenceId,
-      bytes signature
+      bytes memory signature
   ) public onlySigner {
     // Verify the other signer
-    var operationHash = keccak256("ETC", toAddress, value, data, expireTime, sequenceId);
+    bytes32 operationHash = keccak256(abi.encodePacked("ETC", toAddress, value, data, expireTime, sequenceId));
     
-    var otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
+    address otherSigner = verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
 
+    /*
     // Success, send the transaction
     if (!(toAddress.call.value(value)(data))) {
       // Failed executing transaction
       revert();
     }
-    Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
+    */
+    (bool success,) = toAddress.call.value(value)(data);
+    // OR
+    // (bool success, bytes memory dataReturn) = toAddress.call.value(value)(data);
+    require(success);
+    // OR
+    // if ( !success ) {
+    //  revert();
+    // }
+
+    emit Transacted(msg.sender, otherSigner, operationHash, toAddress, value, data);
   }
   
   /**
@@ -156,10 +168,10 @@ contract EtcWalletSimple {
       address tokenContractAddress,
       uint expireTime,
       uint sequenceId,
-      bytes signature
+      bytes memory signature
   ) public onlySigner {
     // Verify the other signer
-    var operationHash = keccak256("ETC-ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId);
+    bytes32 operationHash = keccak256(abi.encodePacked("ETC-ERC20", toAddress, value, tokenContractAddress, expireTime, sequenceId));
     
     verifyMultiSig(toAddress, operationHash, signature, expireTime, sequenceId);
     
@@ -176,8 +188,8 @@ contract EtcWalletSimple {
    * @param tokenContractAddress the address of the erc20 token contract
    */
   function flushForwarderTokens(
-    address forwarderAddress, 
-    address tokenContractAddress
+    address payable forwarderAddress, 
+    address payable tokenContractAddress
   ) public onlySigner {
     Forwarder forwarder = Forwarder(forwarderAddress);
     forwarder.flushTokens(tokenContractAddress);
@@ -196,12 +208,12 @@ contract EtcWalletSimple {
   function verifyMultiSig(
       address toAddress,
       bytes32 operationHash,
-      bytes signature,
+      bytes memory signature,
       uint expireTime,
       uint sequenceId
   ) private returns (address) {
 
-    var otherSigner = recoverAddressFromSignature(operationHash, signature);
+    address otherSigner = recoverAddressFromSignature(operationHash, signature);
 
     // Verify if we are in safe mode. In safe mode, the wallet can only send to signers
     if (safeMode && !isSigner(toAddress)) {
@@ -234,7 +246,7 @@ contract EtcWalletSimple {
    */
   function activateSafeMode() public onlySigner {
     safeMode = true;
-    SafeModeActivated(msg.sender);
+    emit SafeModeActivated(msg.sender);
   }
 
   /**
@@ -245,7 +257,7 @@ contract EtcWalletSimple {
    */
   function recoverAddressFromSignature(
     bytes32 operationHash,
-    bytes signature
+    bytes memory signature
   ) private pure returns (address) {
     if (signature.length != 65) {
       revert();

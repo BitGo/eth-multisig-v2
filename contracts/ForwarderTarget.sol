@@ -1,4 +1,5 @@
-pragma solidity ^0.4.18;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.5 <0.8.0;
 
 
 import "./Forwarder.sol";
@@ -8,7 +9,7 @@ import "./Forwarder.sol";
 contract ForwarderTarget {
   uint public data;
 
-  function ForwarderTarget() public {
+  constructor() public {
   }
 
   function setDataWithValue(uint d, bool b) payable public returns (bool) {
@@ -25,7 +26,7 @@ contract ForwarderTarget {
     new Forwarder();
   }
 
-  function() public payable {
+  function() external payable {
     // accept unspendable balance
   }
 }

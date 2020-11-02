@@ -1,4 +1,5 @@
-pragma solidity ^0.4.11;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.5 <0.8.0;
    
 // ----------------------------------------------------------------------------------------------
 // Sample fixed supply token contract
@@ -9,10 +10,10 @@ pragma solidity ^0.4.11;
 // https://github.com/ethereum/EIPs/issues/20
 contract ERC20Interface {
   // Get the total token supply
-  function totalSupply() public constant returns (uint256);
+  function totalSupply() public view returns (uint256);
 
   // Get the account balance of another account with address _owner
-  function balanceOf(address _owner) public constant returns (uint256 balance);
+  function balanceOf(address _owner) public view returns (uint256 balance);
 
   // Send _value amount of tokens to address _to
   function transfer(address _to, uint256 _value) public returns (bool success);
@@ -26,7 +27,7 @@ contract ERC20Interface {
   function approve(address _spender, uint256 _value) public returns (bool success);
 
   // Returns the amount which _spender is still allowed to withdraw from _owner
-  function allowance(address _owner, address _spender) public constant returns (uint256 remaining);
+  function allowance(address _owner, address _spender) public view returns (uint256 remaining);
 
   // Triggered when tokens are transferred.
   event Transfer(address indexed _from, address indexed _to, uint256 _value);
@@ -36,9 +37,9 @@ contract ERC20Interface {
 }
  
 contract FixedSupplyToken is ERC20Interface {
-  string public constant symbol = "FIXED";
-  string public constant name = "Example Fixed Supply Token";
-  uint8 public constant decimals = 18;
+  string public symbol = "FIXED";
+  string public name = "Example Fixed Supply Token";
+  uint8 public decimals = 18;
   uint256 _totalSupply = 1000000;
   
   // Owner of this contract
@@ -59,17 +60,17 @@ contract FixedSupplyToken is ERC20Interface {
   }
 
   // Constructor
-  function FixedSupplyToken() public {
+  constructor() public {
     owner = msg.sender;
     balances[owner] = _totalSupply;
   }
 
-  function totalSupply() public constant returns (uint256) {
+  function totalSupply() public view returns (uint256) {
     return _totalSupply;
   }
 
   // What is the balance of a particular account?
-  function balanceOf(address _owner) public constant returns (uint256 balance) {
+  function balanceOf(address _owner) public view returns (uint256 balance) {
     return balances[_owner];
   }
 
@@ -78,7 +79,7 @@ contract FixedSupplyToken is ERC20Interface {
     if (balances[msg.sender] >= _amount && _amount > 0 && balances[_to] + _amount > balances[_to]) {
       balances[msg.sender] -= _amount;
       balances[_to] += _amount;
-      Transfer(msg.sender, _to, _amount);
+      emit Transfer(msg.sender, _to, _amount);
       return true;
     } else {
         return false;
@@ -100,7 +101,7 @@ contract FixedSupplyToken is ERC20Interface {
        balances[_from] -= _amount;
        allowed[_from][msg.sender] -= _amount;
        balances[_to] += _amount;
-       Transfer(_from, _to, _amount);
+       emit Transfer(_from, _to, _amount);
        return true;
     } else {
       return false;
@@ -111,11 +112,11 @@ contract FixedSupplyToken is ERC20Interface {
   // If this function is called again it overwrites the current allowance with _value.
   function approve(address _spender, uint256 _amount) public returns (bool success) {
     allowed[msg.sender][_spender] = _amount;
-    Approval(msg.sender, _spender, _amount);
+    emit Approval(msg.sender, _spender, _amount);
     return true;
   }
 
-  function allowance(address _owner, address _spender) public constant returns (uint256 remaining) {
+  function allowance(address _owner, address _spender) public view returns (uint256 remaining) {
     return allowed[_owner][_spender];
   }
 }
