@@ -26,7 +26,7 @@
     "ethereumjs-abi": "^0.6.4",
     "ethereumjs-testrpc": "^6.0.3",
     "ethereumjs-util": "^5.1.2",
-    "lodash": "^4.12.0",
+    "lodash": "^4.17.21",
     "mocha": "^4.0.1",
     "q": "^1.5.1",
     "should": "^8.3.1",
