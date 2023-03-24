@@ -41,13 +41,28 @@ contract RecoveryWallet is CloneFactory {
   /**
    * Creates new forwarder contract controlled by signer in batches
    */
-function createRecoveryForwarder(uint8 value) external {
+  function createRecoveryForwarder(uint8 value) external {
     require(value > 0 && value < 150 , 'value must be greater than 0 and less than 150');
     for ( uint8 i = 0; i < value; ++i) {
     address payable clone = createClone(forwarderImplementationAddress);
-    RecoveryForwarder(clone).init(signer);
+    RecoveryForwarder(clone).init(address(this));
     }
   } 
+
+  /**
+   * Execute a token flush from one of the forwarder addresses. This transfer needs only a single signature and can be done by any signer
+   *
+   * @param forwarderAddress the address of the forwarder address to flush the tokens from
+   * @param tokenContractAddress the address of the erc20 token contract
+   */
+  function flushForwarderTokens(
+    address payable forwarderAddress, 
+    address tokenContractAddress
+  ) external {
+    RecoveryForwarder forwarder = RecoveryForwarder(forwarderAddress);
+    forwarder.flushTokens(tokenContractAddress);
+  }
+
 
   /**
    * Execute a transaction from this wallet using the signer.
@@ -66,5 +81,4 @@ function createRecoveryForwarder(uint8 value) external {
    (bool success, ) = toAddress.call{ value: value }(data);
     require(success, 'Call execution failed');
   }
-  
 }
