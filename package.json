@@ -27,10 +27,10 @@
     "ethereumjs-testrpc": "^6.0.3",
     "ethereumjs-util": "^5.1.2",
     "lodash": "^4.17.21",
-    "mocha": "^4.0.1",
+    "mocha": "^10.2.0",
     "q": "^1.5.1",
     "should": "^8.3.1",
-    "truffle": "^4.0.1",
+    "truffle": "^5.11.5",
     "truffle-config": "^1.0.3",
     "truffle-expect": "^0.0.3"
   }
